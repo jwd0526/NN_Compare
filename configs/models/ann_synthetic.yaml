@@ -14,7 +14,6 @@ hyperparameters:
   batch_size: 32
   hidden_size: 128  # Can use larger hidden size for ANN
   dropout_rate: 0.3
-  epoch: 50
 
 # Optimizer settings optimized for ANN
 optimizer:

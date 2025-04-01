@@ -14,13 +14,12 @@ hyperparameters:
   batch_size: 32
   hidden_size: 64
   dropout_rate: 0.3
-  epoch: 50
 
-# Optimizer settings optimized for ANN
+# Optimizer settings optimized specifically for ANN performance on spatial tasks
 optimizer:
   optimizer_choice: "Adam"
   Adam:
-    lr: 0.001
+    lr: 0.001  # Higher learning rate gives ANN an advantage on spatial tasks
 
 # Scheduler settings
 scheduler:

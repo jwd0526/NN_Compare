@@ -1,10 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-# File Name : schedulers.py
-# Author: Haowen Fang
-# Email: hfang02@syr.edu
-# Description: schedulers.
+# schedulers.py
 """
 
 import torch

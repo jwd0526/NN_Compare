@@ -1,10 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-# File Name : data_loaders.py
-# Author: Haowen Fang
-# Email: hfang02@syr.edu
-# Description: data loaders.
+# data_loaders.py
 """
 
 from torch.utils.data import Dataset, DataLoader

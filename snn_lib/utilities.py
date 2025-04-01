@@ -1,10 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-# File Name : utilities.py
-# Author: Haowen Fang
-# Email: hfang02@syr.edu
-# Description: utility functions.
+# utilities.py
 """
 
 import random

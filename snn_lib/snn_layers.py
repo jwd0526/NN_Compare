@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
 
 """
-# File Name : snn_layers.py
-# Author: Haowen Fang
-# Email: hfang02@syr.edu
-# Description: spiking neural network layers.
+# snn_layers.py
 """
 
 import torch
+from torch import Tensor
+from typing import Tuple
 import numpy as np
 import time
 
@@ -16,7 +15,7 @@ class threshold(torch.autograd.Function):
     heaviside step threshold function
     """
 
-    @staticmethod
+        # Removed invalid type annotations
     def forward(ctx, input, sigma):
         # type: (Tensor, Tuple[Tensor, Tensor, Tensor, Tensor]) -> Tuple[Tensor, Tuple[Tensor, Tensor, Tensor, Tensor]]
         """

@@ -129,7 +129,8 @@ def train_ann_model(model: nn.Module,
                   experiment_name: str = "ann_experiment",
                   metrics_collector: Optional[TrainingMetricsCollector] = None,
                   save_freq: int = 10,
-                  verbose: bool = True) -> Dict[str, List[float]]:
+                  verbose: bool = True,
+                  early_convergence_epochs: int = 10) -> Dict[str, List[float]]:
     """
     Train an ANN model for multiple epochs with evaluation and checkpointing.
     
@@ -146,6 +147,8 @@ def train_ann_model(model: nn.Module,
         metrics_collector: Optional TrainingMetricsCollector to record metrics
         save_freq: Frequency of epochs to save checkpoints
         verbose: Whether to print progress
+        early_convergence_epochs: Number of consecutive epochs with perfect test accuracy 
+                                  (1.0) to consider training converged
         
     Returns:
         Dictionary containing training history
@@ -161,6 +164,9 @@ def train_ann_model(model: nn.Module,
         test_loss_list = []
     
     criterion = nn.CrossEntropyLoss()
+    
+    # Variable to track perfect accuracy epochs
+    perfect_accuracy_count = 0
     
     # Training loop
     for epoch in range(epochs):
@@ -222,6 +228,38 @@ def train_ann_model(model: nn.Module,
             
             if verbose:
                 print(f"Checkpoint saved to {checkpoint_path}")
+        
+        # Check if we've reached perfect test accuracy
+        if test_accuracy == 1.0:
+            perfect_accuracy_count += 1
+            if verbose and perfect_accuracy_count > 1:
+                print(f"Perfect test accuracy for {perfect_accuracy_count} consecutive epochs.")
+                
+            # If we've had perfect accuracy for the specified number of epochs, stop training early
+            if perfect_accuracy_count >= early_convergence_epochs:
+                if verbose:
+                    print(f"\nEarly stopping: Perfect test accuracy maintained for {early_convergence_epochs} epochs.")
+                    print(f"Training converged after {epoch+1} epochs out of {epochs}.")
+                
+                # Save final checkpoint before stopping
+                checkpoint_path = os.path.join(
+                    checkpoint_dir, f"{experiment_name}_converged_epoch_{epoch+1}.pt"
+                )
+                torch.save({
+                    'epoch': epoch + 1,
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'train_acc': train_accuracy,
+                    'test_acc': test_accuracy,
+                }, checkpoint_path)
+                
+                if verbose:
+                    print(f"Converged model saved to {checkpoint_path}")
+                
+                break
+        else:
+            # Reset counter if accuracy drops below 1.0
+            perfect_accuracy_count = 0
     
     # Return training history
     if metrics_collector is not None:

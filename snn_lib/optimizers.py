@@ -1,10 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """
-# File Name : optimizers.py
-# Author: Haowen Fang
-# Email: hfang02@syr.edu
-# Description: optimizers.
+# optimizers.py
 """
 
 import torch

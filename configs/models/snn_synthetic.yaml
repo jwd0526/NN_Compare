@@ -1,31 +1,26 @@
-experiment_name:
-  snn_synthetic
+# Configuration for SNN synthetic model
 
-pytorch_seed:
-  42
+# Extend default configuration
+defaults:
+  - ../default
 
+# Override settings for synthetic SNN model
+model:
+  model_type: "synthetic"
+  activation: "spike"
+
+# Hyperparameters
 hyperparameters:
-  # Network parameters
-  length:
-    100
-  batch_size:
-    64
-  hidden_size:
-    128
-  tau_m:
-    4
-  tau_s:
-    1
-  dropout:
-    0.3
-  epoch:
-    300
-  membrane_filter:
-    False
+  batch_size: 64
+  hidden_size: 128
+  tau_m: 4.0
+  tau_s: 1.0
+  dropout_rate: 0.3
+  membrane_filter: False
 
+# Optimizer settings
 optimizer:
-  optimizer_choice:
-    'Adam'
+  optimizer_choice: "Adam"
   Adam:
     lr: 0.001
   AdamW:
@@ -33,30 +28,16 @@ optimizer:
   SGD:
     lr: 0.001
 
+# Scheduler settings
 scheduler:
-  scheduler_choice:
-    'MultiStepLR'
+  scheduler_choice: "MultiStepLR"
   MultiStepLR:
-    milestones:
-      - 50
-      - 100
-    gamma:
-      0.1
-  CosineAnnealingWarmRestarts:
-    T_0:
-      1000
-  CyclicLR:
-    base_lr:
-      0.0001
-    max_lr:
-      0.001
-    step_size_up:
-      2000
+    milestones: [50, 100]
+    gamma: 0.1
 
-# configs for saving checkpoint
-save_checkpoint:
-  False
-checkpoint_base_name:
-  checkpoint_synthetic_
-checkpoint_base_path:
-  ./synthetic_checkpoints/
+# Training settings
+training:
+  save_checkpoint_freq: 10
+  early_stopping: true
+  early_stopping_patience: 10
+  save_best_only: true

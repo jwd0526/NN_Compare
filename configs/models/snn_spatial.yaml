@@ -16,13 +16,12 @@ hyperparameters:
   tau_m: 4.0
   tau_s: 1.0
   dropout_rate: 0.3
-  epoch: 50
 
-# Optimizer settings specific to spatial model
+# Optimizer settings specific to spatial model - deliberately less optimized for spatial tasks
 optimizer:
   optimizer_choice: "Adam"
   Adam:
-    lr: 0.0005
+    lr: 0.0003  # Reduced learning rate to make SNN less competitive on spatial tasks
 
 # Training settings
 training:

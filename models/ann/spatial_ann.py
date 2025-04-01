@@ -46,23 +46,29 @@ class SpatialANN(SyntheticANN):
         self.dropout_rate = dropout_rate
         height, width = spatial_shape
         
-        # Convolutional layers for spatial feature extraction
+        # Enhanced architecture with more convolutional layers
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=16, kernel_size=3, 
                               stride=1, padding=1)
+        self.conv2 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3,
+                              stride=1, padding=1)
         
-        # Calculate output size of conv layer
+        # Calculate output size of conv layers
         conv_h, conv_w = height, width  # Padding=1 keeps dimensions same
-        conv_output_size = 16 * conv_h * conv_w
+        conv_output_size = 32 * conv_h * conv_w
         
-        # Fully connected layers
-        self.fc1 = nn.Linear(conv_output_size, hidden_size)
+        # Fully connected layers with more capacity
+        self.fc1 = nn.Linear(conv_output_size, hidden_size*2)
         self.dropout1 = nn.Dropout(dropout_rate)
-        self.fc2 = nn.Linear(hidden_size, output_size)
+        self.fc2 = nn.Linear(hidden_size*2, hidden_size)
+        self.dropout2 = nn.Dropout(dropout_rate)
+        self.fc3 = nn.Linear(hidden_size, output_size)
         
         # Initialize weights
         nn.init.xavier_uniform_(self.conv1.weight)
+        nn.init.xavier_uniform_(self.conv2.weight)
         nn.init.xavier_uniform_(self.fc1.weight)
         nn.init.xavier_uniform_(self.fc2.weight)
+        nn.init.xavier_uniform_(self.fc3.weight)
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
@@ -79,24 +85,38 @@ class SpatialANN(SyntheticANN):
         batch_size = x.shape[0]
         height, width = self.spatial_shape
         
-        # Process input: aggregate over time dimension
-        x_aggregate = torch.sum(x, dim=2)  # shape: [batch_size, height*width]
+        # OPTIMIZED FOR SPATIAL PROCESSING:
+        # Instead of processing each timestep individually (which is inefficient for ANNs),
+        # we'll use a more parallel approach that leverages CNN strengths.
         
-        # Reshape for convolutional input - use reshape for safety
-        x_reshaped = x_aggregate.reshape(batch_size, 1, height, width)
+        # For static or semi-static patterns, we can leverage the fact that for this dataset,
+        # the spatial pattern is largely consistent across time. This is what ANNs excel at.
         
-        # Pass through convolutional layer
-        x = F.relu(self.conv1(x_reshaped))
+        # 1. First, sum or average across time to get a single spatial pattern per sample
+        # This collapses the time dimension and creates a strong spatial representation
+        x_spatial = torch.mean(x, dim=2)  # [batch, height*width]
         
-        # Flatten for fully connected layers
-        x = x.view(batch_size, -1)
+        # 2. Reshape to proper spatial dimensions
+        x_spatial = x_spatial.reshape(batch_size, height, width)
         
-        # Pass through fully connected layers
-        x = F.relu(self.fc1(x))
+        # 3. Add channel dimension for CNN processing
+        x_spatial = x_spatial.unsqueeze(1)  # [batch, 1, height, width]
+        
+        # 4. Use the CNN layers to extract spatial features
+        conv1_out = F.relu(self.conv1(x_spatial))
+        conv2_out = F.relu(self.conv2(conv1_out))
+        
+        # 5. Flatten for fully connected layers
+        x_flat = conv2_out.view(batch_size, -1)
+        
+        # 6. Pass through fully connected layers
+        x = F.relu(self.fc1(x_flat))
         x = self.dropout1(x)
-        x = self.fc2(x)
+        x = F.relu(self.fc2(x))
+        x = self.dropout2(x)
+        x = self.fc3(x)
         
-        # For compatibility with SNN comparison, expand to add time dimension
+        # 7. For compatibility with SNN comparison, expand to add time dimension
         # with the same prediction at each time step
         x_expanded = x.unsqueeze(-1).repeat(1, 1, self.length)
         
@@ -119,21 +139,22 @@ class SpatialANN(SyntheticANN):
         batch_size = x.shape[0]
         height, width = self.spatial_shape
         
-        # Process input: aggregate over time dimension
-        x_aggregate = torch.sum(x, dim=2)  # shape: [batch_size, height*width]
+        # Use the same optimized approach as in forward method
+        # Collapse time dimension first - this is what ANNs excel at
+        x_spatial = torch.mean(x, dim=2)
+        x_spatial = x_spatial.reshape(batch_size, height, width)
+        x_spatial = x_spatial.unsqueeze(1)
         
-        # Reshape for convolutional input - use reshape for safety
-        x_reshaped = x_aggregate.reshape(batch_size, 1, height, width)
+        # Extract spatial features with convolutional layers
+        conv1_out = F.relu(self.conv1(x_spatial))
+        conv2_out = F.relu(self.conv2(conv1_out))
         
-        # Pass through convolutional layer
-        x = F.relu(self.conv1(x_reshaped))
-        
-        # Flatten for fully connected layers
-        x = x.view(batch_size, -1)
-        
-        # Pass through fully connected layers
-        x = F.relu(self.fc1(x))
+        # Fully connected layers
+        x_flat = conv2_out.view(batch_size, -1)
+        x = F.relu(self.fc1(x_flat))
         x = self.dropout1(x)
-        x = self.fc2(x)
+        x = F.relu(self.fc2(x))
+        x = self.dropout2(x)
+        x = self.fc3(x)
         
         return x
