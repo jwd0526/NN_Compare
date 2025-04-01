@@ -162,7 +162,18 @@ def load_and_prepare_data(data_path, batch_size):
     
     return train_loader, test_loader, data_info
 
-
+def convert_to_serializable(obj):
+    """Convert an object to a serializable format for JSON."""
+    if isinstance(obj, (np.ndarray, np.number)):
+        return obj.tolist()
+    elif isinstance(obj, torch.Tensor):
+        return obj.detach().cpu().numpy().tolist()
+    elif isinstance(obj, (list, tuple)):
+        return [convert_to_serializable(o) for o in obj]
+    elif isinstance(obj, dict):
+        return {k: convert_to_serializable(v) for k, v in obj.items()}
+    else:
+        return obj
 
 def train_snn(model_type, train_loader, test_loader, data_info, config, 
              device, epochs, experiment_name, output_dir):
@@ -191,7 +202,7 @@ def train_snn(model_type, train_loader, test_loader, data_info, config,
         experiment_name=experiment_name,
         model_type=f"snn_{model_type}",
         save_dir=output_dir,
-        config=convert_to_serializable(config)  # Convert to serializable
+        config=convert_to_serializable(OmegaConf.to_container(config))  # Convert to serializable
     )
     
     # Set dataset information
@@ -268,7 +279,7 @@ def train_ann(model_type, train_loader, test_loader, data_info, config,
         experiment_name=experiment_name,
         model_type=f"ann_{model_type}",
         save_dir=output_dir,
-        config=convert_to_serializable(config)  # Convert to serializable
+        config=convert_to_serializable(OmegaConf.to_container(config))  # Convert to serializable
     )
     
     # Set dataset information

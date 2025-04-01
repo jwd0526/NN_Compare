@@ -1,26 +1,31 @@
-# Configuration for temporal pattern benchmark experiment
+# Configuration for temporal benchmark experiments
+
+# System settings
+pytorch_seed: 42
+cudnn_deterministic: true
 
 # Experiment settings
 experiment:
-  name: temporal_benchmark
-  description: "Benchmark of SNN models on temporal pattern datasets of different difficulty tiers"
+  name: "synthetic_temporal_benchmark"
+  description: "Comparison of SNN and ANN on synthetic temporal data"
   output_dir: "./results/temporal_benchmark"
-
-# Model settings
-model:
-  model_type: "synthetic"  # 'synthetic' or 'spatial'
-  activation: "spike"
 
 # Data settings
 data:
-  dataset_tiers:
-    - "temporal_tier1_easy"
-    - "temporal_tier2_medium"
-    - "temporal_tier3_hard"
-    - "temporal_tier4_expert"
-  data_dir: "./data"
+  data_dir: "./data/synthetic"
+  datasets:
+    - "simple_synthetic_5class.npz"
+    - "medium_synthetic_5class.npz"
+    - "complex_synthetic_5class.npz"
   train_ratio: 0.8
   shuffle: true
+
+# Models to compare
+models:
+  snn:
+    config: "./configs/models/snn_synthetic.yaml"
+  ann:
+    config: "./configs/models/ann_synthetic.yaml"
 
 # Hyperparameters
 hyperparameters:
@@ -29,24 +34,45 @@ hyperparameters:
   tau_m: 4.0
   tau_s: 1.0
   dropout_rate: 0.3
-  epoch: 100
-  
+  epoch: 10  # Reduced for faster testing
+
 # Optimizer settings
 optimizer:
   optimizer_choice: "Adam"
   Adam:
     lr: 0.001
-    weight_decay: 0.0001
+  AdamW:
+    lr: 0.001
+  SGD:
+    lr: 0.01
+  RMSprop:
+    lr: 0.001
 
 # Scheduler settings
 scheduler:
-  scheduler_choice: "CosineAnnealingWarmRestarts"
-  CosineAnnealingWarmRestarts:
-    T_0: 10
-    T_mult: 2
+  scheduler_choice: "none"
+  MultiStepLR:
+    milestones: [30, 60, 90]
+    gamma: 0.1
 
-# Training settings
-training:
-  save_checkpoint_freq: 10
-  early_stopping_patience: 20
-  save_best_only: true
+# Evaluation metrics
+metrics:
+  - accuracy
+  - loss
+  - training_time
+  - convergence_speed
+  - inference_time
+
+# Visualization settings
+visualization:
+  dpi: 150
+  style: "seaborn-v0_8-paper"
+  output_dir: "./results/temporal_benchmark/visualizations"
+  formats:
+    - "png"
+    - "pdf"
+  plots:
+    - accuracy_curves
+    - loss_curves
+    - convergence_comparison
+    - inference_time_comparison

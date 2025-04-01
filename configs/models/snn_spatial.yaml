@@ -1,0 +1,31 @@
+# Configuration for SNN spatial model
+
+# Extend default configuration
+defaults:
+  - ../default
+
+# Override settings for spatial SNN model
+model:
+  model_type: "spatial"
+  activation: "spike"
+
+# Hyperparameters
+hyperparameters:
+  batch_size: 32
+  hidden_size: 64
+  tau_m: 4.0
+  tau_s: 1.0
+  dropout_rate: 0.3
+  epoch: 50
+
+# Optimizer settings specific to spatial model
+optimizer:
+  optimizer_choice: "Adam"
+  Adam:
+    lr: 0.0005
+
+# Training settings
+training:
+  save_checkpoint_freq: 5
+  early_stopping: true
+  early_stopping_patience: 10

@@ -1,0 +1,78 @@
+# Configuration for spatial benchmark experiments
+
+# System settings
+pytorch_seed: 42
+cudnn_deterministic: true
+
+# Experiment settings
+experiment:
+  name: "spatial_pattern_benchmark"
+  description: "Comparison of SNN and ANN on spatial pattern recognition"
+  output_dir: "./results/spatial_benchmark"
+
+# Data settings
+data:
+  data_dir: "./data/spatial"
+  datasets:
+    - "small_spatial_10class.npz" 
+    - "medium_spatial_10class.npz"
+    - "large_spatial_10class.npz"
+  train_ratio: 0.8
+  shuffle: true
+
+# Models to compare
+models:
+  snn:
+    config: "./configs/models/snn_spatial.yaml"
+  ann:
+    config: "./configs/models/ann_spatial.yaml"
+
+# Hyperparameters
+hyperparameters:
+  batch_size: 32
+  hidden_size: 64
+  tau_m: 4.0
+  tau_s: 1.0
+  dropout_rate: 0.3
+  epoch: 10  # Reduced for faster testing
+
+# Optimizer settings
+optimizer:
+  optimizer_choice: "Adam"
+  Adam:
+    lr: 0.001
+  AdamW:
+    lr: 0.001
+  SGD:
+    lr: 0.01
+  RMSprop:
+    lr: 0.001
+
+# Scheduler settings
+scheduler:
+  scheduler_choice: "none"
+  MultiStepLR:
+    milestones: [30, 60, 90]
+    gamma: 0.1
+
+# Evaluation metrics
+metrics:
+  - accuracy
+  - loss
+  - training_time
+  - convergence_speed
+  - inference_time
+
+# Visualization settings
+visualization:
+  dpi: 150
+  style: "seaborn-v0_8-paper"
+  output_dir: "./results/spatial_benchmark/visualizations"
+  formats:
+    - "png"
+    - "pdf"
+  plots:
+    - accuracy_curves
+    - loss_curves
+    - convergence_comparison
+    - inference_time_comparison

@@ -10,8 +10,10 @@ import torch.nn as nn
 from typing import Tuple, Dict, Any
 
 # Import model implementations
-from models.snn.synthetic_snn import SyntheticSpikeModel, SpatialSpikeModel
-from models.ann.synthetic_ann import SyntheticANN, SpatialANN
+from models.snn.synthetic_snn import SyntheticSpikeModel
+from models.snn.spatial_snn import SpatialSpikeModel
+from models.ann.synthetic_ann import SyntheticANN
+from models.ann.spatial_ann import SpatialANN
 
 def create_snn_model(model_type: str, 
                     n_neurons: int, 

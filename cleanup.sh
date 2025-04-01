@@ -7,12 +7,14 @@
 #
 # Usage: ./cleanup.sh [options]
 #   --all             Remove everything (data, results, checkpoints, etc.)
+#   --clean-slate     Remove EVERYTHING to bring repo to a completely clean state
 #   --data            Remove only generated data files
 #   --results         Remove only results files
 #   --checkpoints     Remove only model checkpoints
 #   --visualizations  Remove only visualization files
 #   --temp            Remove only temporary files (__pycache__, .pyc)
 #   --dry-run         Show what would be deleted without actually deleting
+#   --force           Delete without asking for confirmation
 #
 
 # Ensure script is executable: chmod +x cleanup.sh
@@ -35,7 +37,9 @@ DELETE_RESULTS=false
 DELETE_CHECKPOINTS=false
 DELETE_VISUALIZATIONS=false
 DELETE_TEMP=false
+CLEAN_SLATE=false
 DRY_RUN=false
+FORCE=false
 
 # Parse command line arguments
 if [[ $# -eq 0 ]]; then
@@ -51,6 +55,14 @@ for arg in "$@"; do
             DELETE_CHECKPOINTS=true
             DELETE_VISUALIZATIONS=true
             DELETE_TEMP=true
+            ;;
+        --clean-slate)
+            DELETE_DATA=true
+            DELETE_RESULTS=true
+            DELETE_CHECKPOINTS=true
+            DELETE_VISUALIZATIONS=true
+            DELETE_TEMP=true
+            CLEAN_SLATE=true
             ;;
         --data)
             DELETE_DATA=true
@@ -70,15 +82,20 @@ for arg in "$@"; do
         --dry-run)
             DRY_RUN=true
             ;;
+        --force)
+            FORCE=true
+            ;;
         --help)
             echo "Usage: ./cleanup.sh [options]"
             echo "  --all             Remove everything (data, results, checkpoints, etc.)"
+            echo "  --clean-slate     Remove EVERYTHING to bring repo to a completely clean state"
             echo "  --data            Remove only generated data files"
             echo "  --results         Remove only results files"
             echo "  --checkpoints     Remove only model checkpoints"
             echo "  --visualizations  Remove only visualization files"
             echo "  --temp            Remove only temporary files (__pycache__, .pyc)"
             echo "  --dry-run         Show what would be deleted without actually deleting"
+            echo "  --force           Delete without asking for confirmation"
             exit 0
             ;;
         *)
@@ -110,13 +127,19 @@ delete_directory() {
         if $DRY_RUN; then
             echo -e "${YELLOW}[DRY RUN]${NC} Would delete $name directory: $dir"
         else
-            read -p "Are you sure you want to delete this $name directory? (y/n): " confirm
-            if [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]]; then
+            if $FORCE; then
                 echo -e "${RED}Deleting $name directory:${NC} $dir"
                 rm -rf "$dir"
                 echo -e "${GREEN}Deleted successfully!${NC}"
             else
-                echo -e "${BLUE}Skipping deletion of $name directory.${NC}"
+                read -p "Are you sure you want to delete this $name directory? (y/n): " confirm
+                if [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]]; then
+                    echo -e "${RED}Deleting $name directory:${NC} $dir"
+                    rm -rf "$dir"
+                    echo -e "${GREEN}Deleted successfully!${NC}"
+                else
+                    echo -e "${BLUE}Skipping deletion of $name directory.${NC}"
+                fi
             fi
         fi
         echo ""
@@ -147,15 +170,23 @@ delete_files() {
         if $DRY_RUN; then
             echo -e "${YELLOW}[DRY RUN]${NC} Would delete ${#files[@]} $name files"
         else
-            read -p "Are you sure you want to delete these $name files? (y/n): " confirm
-            if [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]]; then
+            if $FORCE; then
                 echo -e "${RED}Deleting $name files...${NC}"
                 for file in "${files[@]}"; do
                     rm -f "$file"
                 done
                 echo -e "${GREEN}Deleted ${#files[@]} files successfully!${NC}"
             else
-                echo -e "${BLUE}Skipping deletion of $name files.${NC}"
+                read -p "Are you sure you want to delete these $name files? (y/n): " confirm
+                if [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]]; then
+                    echo -e "${RED}Deleting $name files...${NC}"
+                    for file in "${files[@]}"; do
+                        rm -f "$file"
+                    done
+                    echo -e "${GREEN}Deleted ${#files[@]} files successfully!${NC}"
+                else
+                    echo -e "${BLUE}Skipping deletion of $name files.${NC}"
+                fi
             fi
         fi
         echo ""
@@ -205,30 +236,49 @@ if $DELETE_VISUALIZATIONS; then
 fi
 
 if $DELETE_TEMP; then
+    temp_files=0
+    
+    # Clean up __pycache__ directories
     find . -name "__pycache__" -type d | while read dir; do
         if $DRY_RUN; then
             echo -e "${YELLOW}[DRY RUN]${NC} Would delete: $dir"
         else
             echo -e "${RED}Deleting:${NC} $dir"
             rm -rf "$dir"
+            ((temp_files++))
         fi
     done
     
+    # Clean up .pyc files
     find . -name "*.pyc" -type f | while read file; do
         if $DRY_RUN; then
             echo -e "${YELLOW}[DRY RUN]${NC} Would delete: $file"
         else
             echo -e "${RED}Deleting:${NC} $file"
             rm -f "$file"
+            ((temp_files++))
         fi
     done
     
+    # Clean up .DS_Store files
     find . -name ".DS_Store" -type f | while read file; do
         if $DRY_RUN; then
             echo -e "${YELLOW}[DRY RUN]${NC} Would delete: $file"
         else
             echo -e "${RED}Deleting:${NC} $file"
             rm -f "$file"
+            ((temp_files++))
+        fi
+    done
+    
+    # Clean up .ipynb_checkpoints directories
+    find . -name ".ipynb_checkpoints" -type d | while read dir; do
+        if $DRY_RUN; then
+            echo -e "${YELLOW}[DRY RUN]${NC} Would delete: $dir"
+        else
+            echo -e "${RED}Deleting:${NC} $dir"
+            rm -rf "$dir"
+            ((temp_files++))
         fi
     done
     
@@ -236,9 +286,62 @@ if $DELETE_TEMP; then
     echo ""
 fi
 
+# Additional clean slate operations
+if $CLEAN_SLATE; then
+    echo -e "\n${BLUE}Performing additional clean slate operations...${NC}"
+    
+    # Remove any generated script output files
+    if $DRY_RUN; then
+        echo -e "${YELLOW}[DRY RUN]${NC} Would remove script output files (*.out, *.log)"
+    else
+        if find . -name "*.out" -o -name "*.log" | grep -q .; then
+            if $FORCE; then
+                echo -e "${RED}Removing script output files${NC}"
+                find . -name "*.out" -o -name "*.log" -exec rm -f {} \;
+            else
+                read -p "Are you sure you want to remove script output files? (y/n): " confirm
+                if [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]]; then
+                    echo -e "${RED}Removing script output files${NC}"
+                    find . -name "*.out" -o -name "*.log" -exec rm -f {} \;
+                else
+                    echo -e "${BLUE}Skipping script output files.${NC}"
+                fi
+            fi
+        else
+            echo "No script output files found."
+        fi
+    fi
+    
+    # Remove any potential virtual environment caches
+    if $DRY_RUN; then
+        echo -e "${YELLOW}[DRY RUN]${NC} Would clean pip cache"
+    else
+        if $FORCE; then
+            echo -e "${RED}Cleaning pip cache${NC}"
+            if command -v pip3 >/dev/null 2>&1; then
+                pip3 cache purge >/dev/null 2>&1 || true
+            fi
+        else
+            read -p "Are you sure you want to clean pip cache? (y/n): " confirm
+            if [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]]; then
+                echo -e "${RED}Cleaning pip cache${NC}"
+                if command -v pip3 >/dev/null 2>&1; then
+                    pip3 cache purge >/dev/null 2>&1 || true
+                fi
+            else
+                echo -e "${BLUE}Skipping pip cache cleanup.${NC}"
+            fi
+        fi
+    fi
+    
+    echo -e "${GREEN}Clean slate operations completed.${NC}"
+fi
+
 # Summary
-echo -e "${GREEN}Cleanup completed!${NC}"
+echo -e "\n${GREEN}Cleanup completed!${NC}"
 if $DRY_RUN; then
     echo -e "${YELLOW}This was a dry run. No files were actually deleted.${NC}"
     echo "Run without --dry-run to perform actual deletion."
+elif $CLEAN_SLATE; then
+    echo -e "${GREEN}Repository has been reset to a clean slate state.${NC}"
 fi

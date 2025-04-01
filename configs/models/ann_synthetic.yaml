@@ -1,46 +1,30 @@
-# Configuration for ANN models on synthetic data
+# Configuration for ANN synthetic model
 
-# Random seed for PyTorch
-pytorch_seed: 42
+# Extend default configuration
+defaults:
+  - ../default
 
-# Model configuration
+# Override settings for synthetic ANN model
 model:
-  model_type: "ann_synthetic"  # Options: "ann_synthetic", "ann_spatial"
+  model_type: "synthetic"
+  activation: "relu"
 
-# Hyperparameters for training
+# Hyperparameters for ANN (no spike-specific params needed)
 hyperparameters:
   batch_size: 32
-  hidden_size: 128
+  hidden_size: 128  # Can use larger hidden size for ANN
   dropout_rate: 0.3
-  epoch: 100
+  epoch: 50
 
-# Optimizer settings
+# Optimizer settings optimized for ANN
 optimizer:
-  optimizer_choice: "Adam"  # Options: "Adam", "SGD", "RMSprop", "AdamW"
+  optimizer_choice: "Adam"
   Adam:
     lr: 0.001
-  SGD:
-    lr: 0.01
-  RMSprop:
-    lr: 0.001
-  AdamW:
-    lr: 0.001
 
-# Learning rate scheduler
+# Scheduler settings
 scheduler:
-  scheduler_choice: "MultiStepLR"  # Options: "MultiStepLR", "CosineAnnealingWarmRestarts", "CyclicLR", "none"
+  scheduler_choice: "MultiStepLR"
   MultiStepLR:
-    milestones: [30, 60, 90]
+    milestones: [20, 40]
     gamma: 0.1
-  CosineAnnealingWarmRestarts:
-    T_0: 10
-  CyclicLR:
-    base_lr: 0.0001
-    max_lr: 0.001
-    step_size_up: 20
-
-# Path for saving checkpoints
-checkpoint_base_path: "./checkpoints"
-
-# Save checkpoint frequency (epochs)
-save_checkpoint_freq: 10
