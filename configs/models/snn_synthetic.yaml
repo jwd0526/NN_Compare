@@ -1,0 +1,62 @@
+experiment_name:
+  snn_synthetic
+
+pytorch_seed:
+  42
+
+hyperparameters:
+  # Network parameters
+  length:
+    100
+  batch_size:
+    64
+  hidden_size:
+    128
+  tau_m:
+    4
+  tau_s:
+    1
+  dropout:
+    0.3
+  epoch:
+    300
+  membrane_filter:
+    False
+
+optimizer:
+  optimizer_choice:
+    'Adam'
+  Adam:
+    lr: 0.001
+  AdamW:
+    lr: 0.001
+  SGD:
+    lr: 0.001
+
+scheduler:
+  scheduler_choice:
+    'MultiStepLR'
+  MultiStepLR:
+    milestones:
+      - 50
+      - 100
+    gamma:
+      0.1
+  CosineAnnealingWarmRestarts:
+    T_0:
+      1000
+  CyclicLR:
+    base_lr:
+      0.0001
+    max_lr:
+      0.001
+    step_size_up:
+      2000
+
+# configs for saving checkpoint
+save_checkpoint:
+  False
+checkpoint_base_name:
+  checkpoint_synthetic_
+checkpoint_base_path:
+  ./synthetic_checkpoints/

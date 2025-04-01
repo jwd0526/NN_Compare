@@ -1,0 +1,70 @@
+# Default configuration for SNN experiments
+
+# System settings
+pytorch_seed: 42
+cudnn_deterministic: true
+
+# Experiment settings
+experiment:
+  name: "snn_experiment"
+  description: "Default SNN experiment configuration"
+  output_dir: "./results"
+
+# Model settings
+model:
+  model_type: "synthetic"  # 'synthetic' or 'spatial'
+  activation: "spike"
+
+# Data settings
+data:
+  data_dir: "./data"
+  train_ratio: 0.8
+  shuffle: true
+
+# Hyperparameters
+hyperparameters:
+  batch_size: 32
+  hidden_size: 64
+  tau_m: 4.0
+  tau_s: 1.0
+  dropout_rate: 0.3
+  epoch: 50
+
+# Optimizer settings
+optimizer:
+  optimizer_choice: "Adam"
+  Adam:
+    lr: 0.001
+  AdamW:
+    lr: 0.001
+  SGD:
+    lr: 0.01
+  RMSprop:
+    lr: 0.001
+
+# Scheduler settings
+scheduler:
+  scheduler_choice: "none"
+  MultiStepLR:
+    milestones: [30, 60, 90]
+    gamma: 0.1
+  CosineAnnealingWarmRestarts:
+    T_0: 10
+  CyclicLR:
+    base_lr: 0.0001
+    max_lr: 0.001
+    step_size_up: 2000
+
+# Training settings
+training:
+  save_checkpoint_freq: 10
+  early_stopping: false
+  early_stopping_patience: 10
+  save_best_only: true
+  verbose: true
+
+# Analysis settings
+analysis:
+  visualization:
+    dpi: 150
+    style: "seaborn-v0_8-paper"
