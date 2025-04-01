@@ -9,7 +9,7 @@ import numpy as np
 import torch
 import random
 from scipy.ndimage import filters
-from typing import List, Tuple, Dict, Optional, Union, Any
+from typing import Tuple
 from torch.utils.data import Dataset, DataLoader
 import os
 
@@ -279,7 +279,7 @@ class SpikeDataset(Dataset):
         if self.transform:
             sample = self.transform(sample)
         
-        return torch.tensor(sample, dtype=torch.float32), torch.tensor(label)
+        return torch.tensor(sample, dtype=torch.float32), torch.tensor(label, dtype=torch.long)
 
 def load_data_from_npz(file_path: str) -> Tuple[np.ndarray, np.ndarray]:
     """

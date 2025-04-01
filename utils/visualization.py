@@ -8,7 +8,7 @@ and training/evaluation metrics.
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
-from typing import List, Tuple, Dict, Optional, Union, Any
+from typing import List, Tuple, Dict, Optional
 
 def plot_raster(spike_mat: np.ndarray, title: str = "Spike Raster Plot", 
                 xlabel: str = "Time", ylabel: str = "Neuron ID", 

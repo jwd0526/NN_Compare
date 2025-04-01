@@ -6,8 +6,7 @@ This module provides functions to load and manage configuration files.
 
 import os
 import yaml
-from typing import Dict, Any, Optional
-import omegaconf
+from typing import Dict, Any
 from omegaconf import OmegaConf
 
 def load_yaml_config(config_path: str) -> Dict[str, Any]:

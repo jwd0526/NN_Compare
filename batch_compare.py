@@ -11,7 +11,6 @@ Usage:
 """
 
 import os
-import sys
 import argparse
 import json
 import time
@@ -21,7 +20,6 @@ import torch
 import matplotlib.pyplot as plt
 import pandas as pd
 from torch.utils.data import DataLoader
-from typing import Dict, List, Any
 
 # Import necessary project components
 from utils.data_utils import load_data_from_npz, split_dataset, SpikeDataset

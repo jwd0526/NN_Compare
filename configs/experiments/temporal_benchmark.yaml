@@ -1,4 +1,5 @@
 # Configuration for temporal benchmark experiments
+# EPOCHS: To change the number of epochs, modify the epoch field in the hyperparameters section (around line 38).
 
 # System settings
 pytorch_seed: 42
@@ -34,26 +35,30 @@ hyperparameters:
   tau_m: 4.0
   tau_s: 1.0
   dropout_rate: 0.3
-  epoch: 10  # Reduced for faster testing
+  epoch: 100
 
 # Optimizer settings
 optimizer:
-  optimizer_choice: "Adam"
+  optimizer_choice: "Adam" # Choose from Adam, AdamW, SGD
   Adam:
     lr: 0.001
   AdamW:
     lr: 0.001
   SGD:
     lr: 0.01
-  RMSprop:
-    lr: 0.001
 
 # Scheduler settings
 scheduler:
-  scheduler_choice: "none"
+  scheduler_choice: "none" # Choose from CosineAnnealingWarmRestarts, CyclicLR, MultiStepLR
   MultiStepLR:
     milestones: [30, 60, 90]
     gamma: 0.1
+  CosineAnnealingWarmRestarts:
+    T_0: 10
+  CyclicLR:
+    base_lr: 0.0001
+    max_lr: 0.001
+    step_size_up: 2000
 
 # Evaluation metrics
 metrics:
