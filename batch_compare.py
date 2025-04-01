@@ -68,18 +68,12 @@ def parse_args():
 
 def setup_environment(args, conf):
     """Set up the training environment."""
-    # Set device
+    # Set device - always use CPU for these small models
     if args.device is not None:
         device = torch.device(args.device)
-    elif torch.backends.mps.is_available():
-        device = torch.device("mps")
-        print("Using MPS acceleration")
-    elif torch.cuda.is_available():
-        device = torch.device('cuda:0')
-        print("Using CUDA acceleration")
     else:
         device = torch.device('cpu')
-        print("Using CPU")
+        print("Using CPU - most efficient for these small models")
     
     # Set random seed
     if args.seed is not None:

@@ -80,20 +80,12 @@ def main():
     if args.seed is not None:
         conf.pytorch_seed = args.seed
     
-    # Set device
+    # Set device - always use CPU for these small models
     if args.device is not None:
         device = torch.device(args.device)
-    elif torch.backends.mps.is_available():
-        device = torch.device("mps")
-        print("Using MPS acceleration")
-    elif torch.cuda.is_available():
-        device = torch.device('cuda:0')
-        print("Using CUDA acceleration")
     else:
         device = torch.device('cpu')
-        print("Using CPU")
-
-    device = torch.device('cpu') # Not a large enough model to benifet from MPS.
+        print("Using CPU - most efficient for these small models")
     
     # Set random seeds for reproducibility
     torch.manual_seed(conf.pytorch_seed)
