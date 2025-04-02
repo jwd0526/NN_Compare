@@ -4,10 +4,12 @@
 # This script runs a comprehensive comparison between ANN and SNN models
 # on both spatial and synthetic datasets, generating visualizations and reports.
 #
-# Usage: ./run_benchmarks.sh [--quick] [--spatial-only] [--temporal-only]
-#   --quick           Run with reduced epochs for quicker testing
-#   --spatial-only    Run only the spatial pattern benchmarks
-#   --temporal-only   Run only the temporal pattern benchmarks
+# Usage: ./run_benchmarks.sh [--quick] [--spatial-only] [--temporal-only] [--detailed-metrics] [--ann-optimized]
+#   --quick              Run with reduced epochs for quicker testing
+#   --spatial-only       Run only the spatial pattern benchmarks
+#   --temporal-only      Run only the temporal pattern benchmarks
+#   --detailed-metrics   Generate enhanced visualizations for temporal data
+#   --ann-optimized      Use ANN-optimized datasets instead of standard spatial datasets
 
 set -e  # Exit on error
 
@@ -20,6 +22,8 @@ CONFIG_DIR="./configs"
 QUICK_MODE=false
 RUN_SPATIAL=true
 RUN_TEMPORAL=true
+DETAILED_METRICS=false
+USE_ANN_OPTIMIZED=false
 
 # Parse command line arguments
 for arg in "$@"; do
@@ -35,9 +39,15 @@ for arg in "$@"; do
             RUN_SPATIAL=false
             RUN_TEMPORAL=true
             ;;
+        --detailed-metrics)
+            DETAILED_METRICS=true
+            ;;
+        --ann-optimized)
+            USE_ANN_OPTIMIZED=true
+            ;;
         *)
             echo "Unknown option: $arg"
-            echo "Usage: ./run_benchmarks.sh [--quick] [--spatial-only] [--temporal-only]"
+            echo "Usage: ./run_benchmarks.sh [--quick] [--spatial-only] [--temporal-only] [--detailed-metrics] [--ann-optimized]"
             exit 1
             ;;
     esac
@@ -48,7 +58,8 @@ if [ "$QUICK_MODE" = true ]; then
     EPOCHS="--epochs 3"
     echo "Running in quick mode with 3 epochs"
 else
-    EPOCHS=""
+    EPOCHS="--epochs 25"
+    echo "Running in full mode with 25 epochs"
 fi
 
 # Display what benchmarks will run
@@ -58,6 +69,14 @@ elif [ "$RUN_SPATIAL" = true ]; then
     echo "Running spatial benchmarks only"
 elif [ "$RUN_TEMPORAL" = true ]; then
     echo "Running temporal benchmarks only"
+fi
+
+if [ "$DETAILED_METRICS" = true ]; then
+    echo "Enhanced visualization metrics enabled"
+fi
+
+if [ "$USE_ANN_OPTIMIZED" = true ]; then
+    echo "Using ANN-optimized datasets for spatial benchmarks"
 fi
 
 # Create required directories
@@ -100,11 +119,18 @@ if [ "$RUN_TEMPORAL" = true ]; then
     echo "
 Step 2: Running temporal pattern benchmarks..."
     echo "Training and comparing ANN and SNN models on synthetic temporal data..."
+    
+    # Additional flags for detailed metrics
+    EXTRA_FLAGS=""
+    if [ "$DETAILED_METRICS" = true ]; then
+        EXTRA_FLAGS="--detailed-metrics"
+    fi
+    
     python3 batch_compare.py \
         --datadir "$DATA_DIR/synthetic" \
         --outdir "$OUTPUT_DIR/temporal_benchmark" \
         --config "$CONFIG_DIR/experiments/temporal_benchmark.yaml" \
-        $EPOCHS
+        $EPOCHS $EXTRA_FLAGS
         
     # Copy example visualizations to the results directory
     mkdir -p "$OUTPUT_DIR/temporal_benchmark/examples"
@@ -113,18 +139,33 @@ fi
 
 # Step 3: Run spatial pattern benchmarks
 if [ "$RUN_SPATIAL" = true ]; then
-    echo "
+    if [ "$USE_ANN_OPTIMIZED" = true ]; then
+        echo "
+Step 3: Running ANN-optimized spatial pattern benchmarks..."
+        echo "Training and comparing ANN and SNN models on ANN-optimized spatial data..."
+        python3 batch_compare.py \
+            --datadir "$DATA_DIR/ann_optimized/datasets" \
+            --outdir "$OUTPUT_DIR/ann_optimized_benchmark" \
+            --config "$CONFIG_DIR/experiments/spatial_benchmark.yaml" \
+            $EPOCHS
+            
+        # Copy example visualizations to the results directory
+        mkdir -p "$OUTPUT_DIR/ann_optimized_benchmark/examples"
+        cp -f "$DATA_DIR/ann_optimized/examples/"*.png "$OUTPUT_DIR/ann_optimized_benchmark/examples/" 2>/dev/null || true
+    else
+        echo "
 Step 3: Running spatial pattern benchmarks..."
-    echo "Training and comparing ANN and SNN models on synthetic spatial data..."
-    python3 batch_compare.py \
-        --datadir "$DATA_DIR/spatial" \
-        --outdir "$OUTPUT_DIR/spatial_benchmark" \
-        --config "$CONFIG_DIR/experiments/spatial_benchmark.yaml" \
-        $EPOCHS
-        
-    # Copy example visualizations to the results directory
-    mkdir -p "$OUTPUT_DIR/spatial_benchmark/examples"
-    cp -f "$DATA_DIR/spatial/examples/"*.png "$OUTPUT_DIR/spatial_benchmark/examples/" 2>/dev/null || true
+        echo "Training and comparing ANN and SNN models on synthetic spatial data..."
+        python3 batch_compare.py \
+            --datadir "$DATA_DIR/spatial" \
+            --outdir "$OUTPUT_DIR/spatial_benchmark" \
+            --config "$CONFIG_DIR/experiments/spatial_benchmark.yaml" \
+            $EPOCHS
+            
+        # Copy example visualizations to the results directory
+        mkdir -p "$OUTPUT_DIR/spatial_benchmark/examples"
+        cp -f "$DATA_DIR/spatial/examples/"*.png "$OUTPUT_DIR/spatial_benchmark/examples/" 2>/dev/null || true
+    fi
 fi
 
 # Step 4: Generate combined comparison report
@@ -139,13 +180,37 @@ echo "Benchmark run completed at: $TIMESTAMP"
 MASTER_REPORT_DIR="$OUTPUT_DIR/master_report"
 mkdir -p "$MASTER_REPORT_DIR"
 
+# Set output directory for spatial benchmark results
+if [ "$USE_ANN_OPTIMIZED" = true ]; then
+    SPATIAL_OUTPUT_DIR="$OUTPUT_DIR/ann_optimized_benchmark"
+else
+    SPATIAL_OUTPUT_DIR="$OUTPUT_DIR/spatial_benchmark"
+fi
+
 # Create report summary based on what was run
 if [ "$RUN_TEMPORAL" = true ] && [ "$RUN_SPATIAL" = true ]; then
     # Both benchmarks were run - copy all visualizations
     cp -f "$OUTPUT_DIR/temporal_benchmark/visualizations/overall_accuracy_comparison.png" "$MASTER_REPORT_DIR/temporal_accuracy_comparison.png" 2>/dev/null || true
     cp -f "$OUTPUT_DIR/temporal_benchmark/visualizations/training_time_ratio.png" "$MASTER_REPORT_DIR/temporal_training_time.png" 2>/dev/null || true
-    cp -f "$OUTPUT_DIR/spatial_benchmark/visualizations/overall_accuracy_comparison.png" "$MASTER_REPORT_DIR/spatial_accuracy_comparison.png" 2>/dev/null || true
-    cp -f "$OUTPUT_DIR/spatial_benchmark/visualizations/training_time_ratio.png" "$MASTER_REPORT_DIR/spatial_training_time.png" 2>/dev/null || true
+    
+    # Copy from the appropriate spatial benchmark directory
+    if [ "$USE_ANN_OPTIMIZED" = true ]; then
+        cp -f "$OUTPUT_DIR/ann_optimized_benchmark/visualizations/overall_accuracy_comparison.png" "$MASTER_REPORT_DIR/spatial_accuracy_comparison.png" 2>/dev/null || true
+        cp -f "$OUTPUT_DIR/ann_optimized_benchmark/visualizations/training_time_ratio.png" "$MASTER_REPORT_DIR/spatial_training_time.png" 2>/dev/null || true
+    else
+        cp -f "$OUTPUT_DIR/spatial_benchmark/visualizations/overall_accuracy_comparison.png" "$MASTER_REPORT_DIR/spatial_accuracy_comparison.png" 2>/dev/null || true
+        cp -f "$OUTPUT_DIR/spatial_benchmark/visualizations/training_time_ratio.png" "$MASTER_REPORT_DIR/spatial_training_time.png" 2>/dev/null || true
+    fi
+    
+    # Copy enhanced temporal visualizations if they exist
+    if [ "$DETAILED_METRICS" = true ]; then
+        mkdir -p "$MASTER_REPORT_DIR/temporal_detailed_metrics"
+        cp -f "$OUTPUT_DIR/temporal_benchmark/visualizations/temporal_comparison_dashboard.png" "$MASTER_REPORT_DIR/temporal_detailed_metrics/" 2>/dev/null || true
+        cp -f "$OUTPUT_DIR/temporal_benchmark/visualizations/learning_dynamics.png" "$MASTER_REPORT_DIR/temporal_detailed_metrics/" 2>/dev/null || true
+        cp -f "$OUTPUT_DIR/temporal_benchmark/visualizations/temporal_feature_importance.png" "$MASTER_REPORT_DIR/temporal_detailed_metrics/" 2>/dev/null || true
+        cp -f "$OUTPUT_DIR/temporal_benchmark/visualizations/error_comparison_log.png" "$MASTER_REPORT_DIR/temporal_detailed_metrics/" 2>/dev/null || true
+        cp -f "$OUTPUT_DIR/temporal_benchmark/visualizations/accuracy_gain.png" "$MASTER_REPORT_DIR/temporal_detailed_metrics/" 2>/dev/null || true
+    fi
     
     # Create comprehensive master report
     cat > "$MASTER_REPORT_DIR/master_summary.txt" << EOL
@@ -170,7 +235,23 @@ SUMMARY OF FINDINGS:
 
 3. Detailed Results:
    - Full temporal benchmark results: $OUTPUT_DIR/temporal_benchmark
-   - Full spatial benchmark results: $OUTPUT_DIR/spatial_benchmark
+   - Full spatial benchmark results: $SPATIAL_OUTPUT_DIR
+EOL
+
+    if [ "$DETAILED_METRICS" = true ]; then
+        cat >> "$MASTER_REPORT_DIR/master_summary.txt" << EOL
+
+4. Enhanced Temporal Analytics:
+   - Temporal Comparison Dashboard: View in temporal_detailed_metrics/
+   - Learning Dynamics: See detailed learning behavior analysis
+   - Temporal Feature Importance: Analysis of which temporal features
+     are better handled by each model type
+   - Error Analysis: Log-scale visualization of error rates
+   - Accuracy Gain: First-derivative analysis of learning progress
+EOL
+    fi
+
+    cat >> "$MASTER_REPORT_DIR/master_summary.txt" << EOL
 
 KEY OBSERVATIONS:
    - (Add key observations after viewing the results)
@@ -186,6 +267,16 @@ elif [ "$RUN_TEMPORAL" = true ]; then
     # Only temporal benchmark was run
     cp -f "$OUTPUT_DIR/temporal_benchmark/visualizations/overall_accuracy_comparison.png" "$MASTER_REPORT_DIR/temporal_accuracy_comparison.png" 2>/dev/null || true
     cp -f "$OUTPUT_DIR/temporal_benchmark/visualizations/training_time_ratio.png" "$MASTER_REPORT_DIR/temporal_training_time.png" 2>/dev/null || true
+    
+    # Copy enhanced temporal visualizations if they exist
+    if [ "$DETAILED_METRICS" = true ]; then
+        mkdir -p "$MASTER_REPORT_DIR/temporal_detailed_metrics"
+        cp -f "$OUTPUT_DIR/temporal_benchmark/visualizations/temporal_comparison_dashboard.png" "$MASTER_REPORT_DIR/temporal_detailed_metrics/" 2>/dev/null || true
+        cp -f "$OUTPUT_DIR/temporal_benchmark/visualizations/learning_dynamics.png" "$MASTER_REPORT_DIR/temporal_detailed_metrics/" 2>/dev/null || true
+        cp -f "$OUTPUT_DIR/temporal_benchmark/visualizations/temporal_feature_importance.png" "$MASTER_REPORT_DIR/temporal_detailed_metrics/" 2>/dev/null || true
+        cp -f "$OUTPUT_DIR/temporal_benchmark/visualizations/error_comparison_log.png" "$MASTER_REPORT_DIR/temporal_detailed_metrics/" 2>/dev/null || true
+        cp -f "$OUTPUT_DIR/temporal_benchmark/visualizations/accuracy_gain.png" "$MASTER_REPORT_DIR/temporal_detailed_metrics/" 2>/dev/null || true
+    fi
     
     # Create temporal-only report
     cat > "$MASTER_REPORT_DIR/master_summary.txt" << EOL
@@ -210,6 +301,23 @@ SUMMARY OF FINDINGS:
 
 3. Detailed Results:
    - Full temporal benchmark results: $OUTPUT_DIR/temporal_benchmark
+   - Full spatial benchmark results: $SPATIAL_OUTPUT_DIR
+EOL
+
+    if [ "$DETAILED_METRICS" = true ]; then
+        cat >> "$MASTER_REPORT_DIR/master_summary.txt" << EOL
+
+4. Enhanced Temporal Analytics:
+   - Temporal Comparison Dashboard: View in temporal_detailed_metrics/
+   - Learning Dynamics: See detailed learning behavior analysis
+   - Temporal Feature Importance: Analysis of which temporal features
+     are better handled by each model type
+   - Error Analysis: Log-scale visualization of error rates
+   - Accuracy Gain: First-derivative analysis of learning progress
+EOL
+    fi
+
+    cat >> "$MASTER_REPORT_DIR/master_summary.txt" << EOL
 
 KEY OBSERVATIONS:
    - (Add key observations after viewing the results)

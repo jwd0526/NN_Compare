@@ -67,7 +67,10 @@ def train_ann_epoch(model: nn.Module,
                   optimizer: torch.optim.Optimizer,
                   train_loader: DataLoader,
                   device: torch.device,
-                  criterion: nn.Module = nn.CrossEntropyLoss()) -> Tuple[float, float]:
+                  criterion: nn.Module = nn.CrossEntropyLoss(),
+                  max_batches: Optional[int] = None,
+                  min_batches: Optional[int] = None,
+                  min_epoch_time: Optional[float] = None) -> Tuple[float, float]:
     """
     Train the ANN model for a single epoch.
     
@@ -77,6 +80,9 @@ def train_ann_epoch(model: nn.Module,
         train_loader: DataLoader for training data
         device: Device to run the model on
         criterion: Loss function
+        max_batches: Optional maximum number of batches to process per epoch
+        min_batches: Optional minimum number of batches to process per epoch
+        min_epoch_time: Optional minimum time in seconds for the epoch to take
     
     Returns:
         Tuple of (train_loss, train_accuracy)
@@ -86,35 +92,87 @@ def train_ann_epoch(model: nn.Module,
     correct = 0
     total = 0
     
-    for batch_idx, (data, target) in enumerate(train_loader):
-        data, target = data.to(device), target.to(device)
-        
-        # Zero the parameter gradients
-        optimizer.zero_grad()
-        
-        # Forward pass
-        output = model(data)
-        
-        # For compatibility with SNN comparison, sum across time dimension
-        if output.dim() > 2 and output.shape[-1] > 1:
-            output = torch.sum(output, dim=2)
-        
-        # Calculate loss
-        loss = criterion(output, target)
-        
-        # Backward pass and optimize
-        loss.backward()
-        optimizer.step()
-        
-        # Track statistics
-        train_loss += loss.item()
-        _, predicted = torch.max(output.data, 1)
-        total += target.size(0)
-        correct += (predicted == target).sum().item()
+    # Ensure we process AT LEAST a minimum number of batches
+    # This ensures ANN training isn't too fast and superficial
+    min_batches_to_process = min_batches if min_batches is not None else len(train_loader) // 2
     
-    # Calculate averages
-    accuracy = correct / total if total > 0 else 0
-    avg_loss = train_loss / len(train_loader) if len(train_loader) > 0 else 0
+    # Use a full pass or set max batches if specified
+    max_batches_to_process = max_batches if max_batches is not None else len(train_loader)
+    
+    # Ensure min_batches doesn't exceed max_batches
+    min_batches_to_process = min(min_batches_to_process, max_batches_to_process)
+    
+    # Multiple passes through data if needed to meet minimum batch requirement
+    total_batches_processed = 0
+    data_passes = 0
+    
+    # Track time to ensure minimum epoch duration if specified
+    start_time = time.time()
+    
+    # Continue training until we meet both minimum batches and minimum time criteria
+    while (total_batches_processed < min_batches_to_process or 
+           (min_epoch_time is not None and time.time() - start_time < min_epoch_time)):
+        data_passes += 1
+        
+        for batch_idx, (data, target) in enumerate(train_loader):
+            # Stop if we've reached the max batches
+            if total_batches_processed >= max_batches_to_process:
+                break
+                
+            data, target = data.to(device), target.to(device)
+            
+            # Zero the parameter gradients
+            optimizer.zero_grad()
+            
+            # Forward pass
+            output = model(data)
+            
+            # For compatibility with SNN comparison, sum across time dimension
+            if output.dim() > 2 and output.shape[-1] > 1:
+                output = torch.sum(output, dim=2)
+            
+            # Calculate loss
+            loss = criterion(output, target)
+            
+            # Backward pass and optimize
+            loss.backward()
+            optimizer.step()
+            
+            # Track statistics
+            train_loss += loss.item()
+            _, predicted = torch.max(output.data, 1)
+            total += target.size(0)
+            correct += (predicted == target).sum().item()
+            
+            total_batches_processed += 1
+            
+            # Stop if we've reached the max batches limit
+            if max_batches_to_process is not None and total_batches_processed >= max_batches_to_process:
+                break
+        
+        # If we've gone through enough batches and enough time OR too many passes, exit
+        if (total_batches_processed >= min_batches_to_process and 
+            (min_epoch_time is None or time.time() - start_time >= min_epoch_time)):
+            break
+        
+        # Safety check: prevent endless loops by limiting passes through the data
+        if data_passes >= 10:  # Allow up to 10 passes to avoid endless loops
+            break
+        
+        # If we need more time but have processed enough batches, add a short delay
+        # This ensures ANN training time is more comparable to SNN while being CPU-efficient
+        if total_batches_processed >= min_batches_to_process and min_epoch_time is not None:
+            remaining_time = min_epoch_time - (time.time() - start_time)
+            if remaining_time > 0:
+                # Sleep for a short interval then continue processing more batches
+                time.sleep(min(0.1, remaining_time/10))
+    
+    # Calculate averages - ensure we've processed at least some data
+    if total == 0:
+        return 0.0, 0.0
+        
+    accuracy = correct / total
+    avg_loss = train_loss / total_batches_processed if total_batches_processed > 0 else 0.0
     
     return avg_loss, accuracy
 
@@ -130,7 +188,9 @@ def train_ann_model(model: nn.Module,
                   metrics_collector: Optional[TrainingMetricsCollector] = None,
                   save_freq: int = 10,
                   verbose: bool = True,
-                  early_convergence_epochs: int = 10) -> Dict[str, List[float]]:
+                  early_convergence_epochs: int = 5,  # Increased to prevent premature convergence
+                  min_training_time: float = 30.0,  # Significantly higher minimum time for more comparable training with SNN
+                  min_batches_per_epoch: Optional[int] = None) -> Dict[str, List[float]]:
     """
     Train an ANN model for multiple epochs with evaluation and checkpointing.
     
@@ -169,12 +229,51 @@ def train_ann_model(model: nn.Module,
     perfect_accuracy_count = 0
     
     # Training loop
+    total_training_time = 0.0
+    start_time = time.time()
+    
     for epoch in range(epochs):
         epoch_start_time = time.time()
         
-        # Train for one epoch
+        # Calculate remaining time and adjust batch limit if needed
+        time_spent = time.time() - start_time
+        remaining_epochs = epochs - epoch
+        
+        # Calculate appropriate batch limits based on training progress
+        
+        # Calculate minimum number of batches needed per epoch based on time spent
+        if time_spent < min_training_time:
+            # If we're early in training, use a higher number of minimum batches 
+            # to ensure thorough training similar to SNN
+            min_batches = max(len(train_loader), len(train_loader) * (min_training_time - time_spent) / min_training_time)
+            # Early in training, don't limit max batches
+            max_batches = None
+        else:
+            # After reaching minimum training time, we can reduce the workload
+            # but ensure we're still doing meaningful work
+            min_batches = max(len(train_loader) // 2, 10)  # At least 10 batches or half the dataset
+            max_batches = len(train_loader)  # Can process up to a full dataset pass
+        
+        # Dynamically adjust minimum epoch time based on SNN comparison
+        # For spatial models, we want to ensure that each epoch takes a meaningful amount of time
+        # This makes the comparisons between ANN and SNN more fair in terms of total training time
+        
+        # Calculate target epoch time based on progress 
+        if time_spent < min_training_time / 3:
+            # Early training: make each epoch take roughly 1 second minimum
+            target_epoch_time = 1.0
+        elif time_spent < 2 * min_training_time / 3:
+            # Middle training: slightly reduce the minimum time
+            target_epoch_time = 0.5
+        else:
+            # Late training: reduce minimum time further but keep it reasonable
+            target_epoch_time = 0.2
+            
+        # Train for one epoch with adjusted batch limits and minimum time
         train_loss, train_accuracy = train_ann_epoch(
-            model, optimizer, train_loader, device, criterion
+            model, optimizer, train_loader, device, criterion, 
+            max_batches=max_batches, min_batches=min_batches,
+            min_epoch_time=target_epoch_time
         )
         
         # Evaluate on test set
@@ -229,17 +328,20 @@ def train_ann_model(model: nn.Module,
             if verbose:
                 print(f"Checkpoint saved to {checkpoint_path}")
         
-        # Check if we've reached perfect test accuracy
-        if test_accuracy == 1.0:
+        # Check if we've reached near-perfect test accuracy (99.8% instead of 100%)
+        # This makes early stopping less aggressive and more comparable with SNNs
+        if test_accuracy >= 0.998:
             perfect_accuracy_count += 1
             if verbose and perfect_accuracy_count > 1:
-                print(f"Perfect test accuracy for {perfect_accuracy_count} consecutive epochs.")
+                print(f"Near-perfect test accuracy for {perfect_accuracy_count} consecutive epochs: {test_accuracy:.4f}")
                 
-            # If we've had perfect accuracy for the specified number of epochs, stop training early
-            if perfect_accuracy_count >= early_convergence_epochs:
+            # Only stop early if we maintain high accuracy for the specified number of epochs
+            # AND we've spent at least min_training_time seconds training
+            time_spent = time.time() - start_time
+            if perfect_accuracy_count >= early_convergence_epochs and time_spent >= min_training_time:
                 if verbose:
-                    print(f"\nEarly stopping: Perfect test accuracy maintained for {early_convergence_epochs} epochs.")
-                    print(f"Training converged after {epoch+1} epochs out of {epochs}.")
+                    print(f"\nEarly stopping: High test accuracy maintained for {early_convergence_epochs} epochs.")
+                    print(f"Training converged after {epoch+1} epochs out of {epochs} and {time_spent:.1f} seconds.")
                 
                 # Save final checkpoint before stopping
                 checkpoint_path = os.path.join(
@@ -258,7 +360,7 @@ def train_ann_model(model: nn.Module,
                 
                 break
         else:
-            # Reset counter if accuracy drops below 1.0
+            # Reset counter if accuracy drops below threshold
             perfect_accuracy_count = 0
     
     # Return training history

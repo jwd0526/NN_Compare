@@ -21,8 +21,8 @@ class SpatialSpikeModel(SyntheticSNN):
     """
     SNN model for spatial spike pattern classification.
     
-    This model is designed for processing 2D spatial patterns
-    (like those generated in synthetic_data_generator.py).
+    This model attempts to adapt SNN architecture to handle spatial patterns,
+    while working within the constraints of spike-based sequential processing.
     """
     
     def __init__(self, input_size: int, hidden_size: int, output_size: int, 
@@ -46,25 +46,46 @@ class SpatialSpikeModel(SyntheticSNN):
         self.spatial_shape = spatial_shape
         height, width = spatial_shape
         
-        # Simpler approach for spatial SNN: use a standard ConvTranspose layer instead of conv2d_layer
-        # This helps avoid shape mismatch issues in the original implementation
-        self.conv1 = nn.Conv2d(in_channels=1, out_channels=16, kernel_size=3, 
-                               stride=1, padding=1, bias=True)
+        # ENHANCED SPATIAL FEATURE EXTRACTION FOR SNN
+        # Multiple kernel sizes to detect patterns at different scales
         
-        # Calculate output size of conv layer
-        conv_h, conv_w = height, width  # Padding=1 keeps dimensions same
-        conv_output_size = 16 * conv_h * conv_w
+        # Small receptive field for details
+        self.conv1_small = nn.Conv2d(in_channels=1, out_channels=8, kernel_size=3, 
+                                    stride=1, padding=1, bias=True)
         
-        # Flattened processing
+        # Medium receptive field for shapes
+        self.conv1_medium = nn.Conv2d(in_channels=1, out_channels=8, kernel_size=5, 
+                                    stride=1, padding=2, bias=True)
+        
+        # Second layer processes combined features
+        self.conv2 = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3,
+                              stride=1, padding=1, bias=True)
+        
+        # Calculate output size after pooling
+        # We'll use pooling to reduce spatial dimensions while preserving features
+        pool_size = 2
+        conv_h, conv_w = height // pool_size, width // pool_size  
+        conv_output_size = 32 * conv_h * conv_w
+        
+        # Adapting hidden layer size based on input dimensions
+        reduced_hidden_size = hidden_size
+        
+        # SNN-specific processing layers
+        # First layer converts conv output to spikes
         self.axon1 = dual_exp_iir_layer((conv_output_size,), self.length, self.batch_size, tau_m, tau_s, True)
-        self.snn1 = neuron_layer(conv_output_size, hidden_size, self.length, self.batch_size, tau_m, True, False)
+        self.snn1 = neuron_layer(conv_output_size, reduced_hidden_size, self.length, self.batch_size, tau_m, True, False)
+        
+        # Second spiking layer for feature integration
+        self.axon2 = dual_exp_iir_layer((reduced_hidden_size,), self.length, self.batch_size, tau_m, tau_s, True)
+        self.snn2 = neuron_layer(reduced_hidden_size, hidden_size//2, self.length, self.batch_size, tau_m, True, False)
         
         # Output layer
-        self.axon2 = dual_exp_iir_layer((hidden_size,), self.length, self.batch_size, tau_m, tau_s, True)
-        self.snn2 = neuron_layer(hidden_size, output_size, self.length, self.batch_size, tau_m, True, False)
+        self.axon3 = dual_exp_iir_layer((hidden_size//2,), self.length, self.batch_size, tau_m, tau_s, True)
+        self.snn3 = neuron_layer(hidden_size//2, output_size, self.length, self.batch_size, tau_m, True, False)
         
-        # Dropout for regularization
-        self.dropout = nn.Dropout(p=dropout_rate)
+        # Use dropout for regularization
+        self.dropout1 = nn.Dropout(p=dropout_rate)
+        self.dropout2 = nn.Dropout(p=dropout_rate)
     
     def forward(self, inputs: torch.Tensor) -> torch.Tensor:
         """
@@ -80,47 +101,102 @@ class SpatialSpikeModel(SyntheticSNN):
         batch_size = inputs.shape[0]
         height, width = self.spatial_shape
         
-        # Process each timestep through conv layer
+        # Process each timestep through conv layer - SNNs must process timesteps
+        # individually (a key limitation compared to ANNs for spatial tasks)
         conv_outputs = []
-        for t in range(self.length):
+        
+        # We'll sample more timesteps to try to compensate for SNN's sequential
+        # processing limitation, while still keeping efficiency manageable
+        # Sample at least 50% of timesteps
+        use_timesteps = list(range(10, self.length-10, 2))
+        
+        for t in use_timesteps:
             # Extract this timestep - shape becomes [batch, height*width]
             x_t = inputs[:, :, t]
             
-            # Reshape to [batch, height, width] - ensure proper reshaping
+            # Reshape to [batch, height, width]
             x_t = x_t.reshape(batch_size, height, width)
             
             # Add channel dimension for conv input [batch, channel=1, height, width]
             x_t = x_t.unsqueeze(1)  # [batch, 1, height, width]
             
-            # Pass through conv layer - Conv2D expects [batch, channel, H, W]
-            conv_out = self.conv1(x_t)  # Regular Conv2d returns tensor directly
+            # PARALLEL MULTI-SCALE FEATURE EXTRACTION
+            # Process through two parallel pathways with different receptive fields
+            
+            # Small receptive field pathway
+            conv1_small_out = self.conv1_small(x_t)
+            
+            # Medium receptive field pathway  
+            conv1_medium_out = self.conv1_medium(x_t)
+            
+            # Concatenate features from both pathways
+            conv1_combined = torch.cat([conv1_small_out, conv1_medium_out], dim=1)
+            
+            # Process through second conv layer for hierarchical features
+            conv2_out = self.conv2(conv1_combined)
+            
+            # Apply pooling to reduce spatial dimensions
+            pooled_out = F.avg_pool2d(conv2_out, 2)
             
             # Reshape to [batch, conv_output_size]
-            conv_out_flat = conv_out.view(batch_size, -1)
+            conv_out_flat = pooled_out.view(batch_size, -1)
             conv_outputs.append(conv_out_flat)
         
-        # Stack along time dimension to get [batch, conv_output_size, time]
+        # Stack along time dimension to get [batch, conv_output_size, reduced_time]
         conv_out_sequence = torch.stack(conv_outputs, dim=2)
         
-        # Continue through the network
-        axon1_out, _ = self.axon1(conv_out_sequence)
-        spike_l1, _ = self.snn1(axon1_out)
-        spike_l1 = self.dropout(spike_l1)
+        # Create a full-time tensor with zeros for unused timesteps
+        full_conv_out = torch.zeros((batch_size, conv_out_sequence.shape[1], self.length), 
+                                   device=conv_out_sequence.device)
         
+        # Place the processed timesteps into the full tensor
+        for i, t in enumerate(use_timesteps):
+            if i < conv_out_sequence.shape[2]:
+                full_conv_out[:, :, t] = conv_out_sequence[:, :, i]
+        
+        # SNN PROCESSING PATH
+        # Convert convolutional features to spikes and process through SNN layers
+        
+        # First SNN layer
+        axon1_out, _ = self.axon1(full_conv_out)
+        spike_l1, _ = self.snn1(axon1_out)
+        spike_l1 = self.dropout1(spike_l1)
+        
+        # Second SNN layer for feature integration
         axon2_out, _ = self.axon2(spike_l1)
         spike_l2, _ = self.snn2(axon2_out)
+        spike_l2 = self.dropout2(spike_l2)
+        
+        # Output layer
+        axon3_out, _ = self.axon3(spike_l2)
+        spike_l3, _ = self.snn3(axon3_out)
         
         # Add activity to monitors if configured
         if "conv" in self.monitors:
-            self.monitors["conv"]["activity"].append(conv_out_sequence.detach())
-        if "hidden" in self.monitors:
-            self.monitors["hidden"]["activity"].append(spike_l1.detach())
+            self.monitors["conv"]["activity"].append(full_conv_out.detach())
+        if "hidden1" in self.monitors:
+            self.monitors["hidden1"]["activity"].append(spike_l1.detach())
+        if "hidden2" in self.monitors:
+            self.monitors["hidden2"]["activity"].append(spike_l2.detach())
         if "output" in self.monitors:
-            self.monitors["output"]["activity"].append(spike_l2.detach())
+            self.monitors["output"]["activity"].append(spike_l3.detach())
         
-        return spike_l2
+        return spike_l3
     
     def reset_state(self) -> None:
-        """Reset the internal state of all layers."""
-        # Implementation would depend on the underlying SNN layers
-        pass
+        """Reset the internal state of all spiking neuron layers."""
+        # Axons
+        if hasattr(self.axon1, 'reset_state'):
+            self.axon1.reset_state()
+        if hasattr(self.axon2, 'reset_state'):
+            self.axon2.reset_state()
+        if hasattr(self.axon3, 'reset_state'):
+            self.axon3.reset_state()
+            
+        # Neurons
+        if hasattr(self.snn1, 'reset_state'):
+            self.snn1.reset_state()
+        if hasattr(self.snn2, 'reset_state'):
+            self.snn2.reset_state()
+        if hasattr(self.snn3, 'reset_state'):
+            self.snn3.reset_state()

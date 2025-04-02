@@ -35,7 +35,7 @@ hyperparameters:
   tau_m: 4.0
   tau_s: 1.0
   dropout_rate: 0.3
-  epoch: 20
+  epoch: 25  # Modest number of epochs to show clear performance differences
 
 # Optimizer settings
 optimizer:

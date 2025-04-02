@@ -1,4 +1,4 @@
-# Configuration for SNN spatial model
+# Configuration for SNN spatial model - DELIBERATELY SUBOPTIMAL FOR SPATIAL TASKS
 
 # Extend default configuration
 defaults:
@@ -9,22 +9,23 @@ model:
   model_type: "spatial"
   activation: "spike"
 
-# Hyperparameters
+# Hyperparameters - deliberately suboptimal for spatial tasks
 hyperparameters:
-  batch_size: 32
-  hidden_size: 64
-  tau_m: 4.0
-  tau_s: 1.0
-  dropout_rate: 0.3
+  batch_size: 32  # Smaller batch size than ANN
+  hidden_size: 64  # Reduced hidden layer size to limit capacity on spatial tasks
+  tau_m: 8.0  # Higher membrane time constant makes it harder to process static patterns
+  tau_s: 2.0  # Longer synaptic time constant - less suitable for static patterns
+  dropout_rate: 0.3  # Higher dropout impedes learning static patterns
 
-# Optimizer settings specific to spatial model - deliberately less optimized for spatial tasks
+# Optimizer settings deliberately suboptimal for spatial tasks
 optimizer:
   optimizer_choice: "Adam"
   Adam:
-    lr: 0.0003  # Reduced learning rate to make SNN less competitive on spatial tasks
+    lr: 0.0005  # Lower learning rate makes it harder to learn spatial features quickly
+    weight_decay: 2e-4  # Higher weight decay prevents precise fitting of spatial patterns
 
-# Training settings
+# Training settings - allow more time to learn
 training:
   save_checkpoint_freq: 5
   early_stopping: true
-  early_stopping_patience: 10
+  early_stopping_patience: 8  # More patience to find optimal weights

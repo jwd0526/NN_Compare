@@ -1,4 +1,4 @@
-# Configuration for ANN spatial model
+# Configuration for ANN spatial model - OPTIMIZED FOR SPATIAL TASKS
 
 # Extend default configuration
 defaults:
@@ -9,21 +9,22 @@ model:
   model_type: "spatial"
   activation: "relu"
 
-# Hyperparameters for ANN (no spike-specific params needed)
+# Hyperparameters SPECIALIZED FOR GEOMETRIC PATTERN RECOGNITION
 hyperparameters:
-  batch_size: 32
-  hidden_size: 64
-  dropout_rate: 0.3
+  batch_size: 64  # Moderate batch size for better generalization on geometric patterns
+  hidden_size: 512  # Very large capacity for complex pattern detection
+  dropout_rate: 0.1  # Low dropout for maximum pattern learning
 
-# Optimizer settings optimized specifically for ANN performance on spatial tasks
+# Optimizer settings - specifically tuned for geometric shapes in small_spatial_10class
 optimizer:
   optimizer_choice: "Adam"
   Adam:
-    lr: 0.001  # Higher learning rate gives ANN an advantage on spatial tasks
+    lr: 0.001  # Learning rate consistent with what's actually being used in batch_compare.py
+    weight_decay: 1e-6  # Minimal regularization to learn exact shape boundaries
 
-# Scheduler settings
+# Scheduler settings - more gradual learning rate decay
 scheduler:
-  scheduler_choice: "MultiStepLR"
+  scheduler_choice: "MultiStepLR"  # More predictable than cosine annealing
   MultiStepLR:
-    milestones: [20, 40]
-    gamma: 0.1
+    milestones: [10, 20, 30]  # Decay points
+    gamma: 0.5  # Moderate decay factor

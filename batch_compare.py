@@ -19,6 +19,7 @@ import numpy as np
 import torch
 import matplotlib.pyplot as plt
 import pandas as pd
+import seaborn as sns
 from torch.utils.data import DataLoader
 
 # Import necessary project components
@@ -61,6 +62,8 @@ def parse_args():
                       help='Skip SNN training')
     parser.add_argument('--skip-ann', action='store_true',
                       help='Skip ANN training')
+    parser.add_argument('--detailed-metrics', action='store_true',
+                      help='Generate enhanced visualizations for temporal data')
     
     return parser.parse_args()
 
@@ -100,8 +103,11 @@ def get_dataset_files(data_dir, filter_pattern=None):
 
 def determine_model_type(dataset_name):
     """Determine the appropriate model type from the dataset name."""
-    if 'spatial' in dataset_name.lower():
+    dataset_name = dataset_name.lower()
+    if 'spatial' in dataset_name:
         return 'spatial'
+    elif 'ann_optimized' in dataset_name:
+        return 'spatial'  # ANN-optimized datasets use the spatial model architecture
     else:
         return 'synthetic'
 
@@ -330,6 +336,9 @@ def generate_comparison_visualizations(snn_results, ann_results, data_info, outp
     snn_history = snn_results["history"]
     ann_history = ann_results["history"]
     
+    # Determine if this is a temporal dataset
+    is_temporal = determine_model_type(data_info["dataset_name"]) == "synthetic"
+    
     # 1. Accuracy Comparison
     plt.figure(figsize=(12, 6))
     
@@ -443,12 +452,94 @@ def generate_comparison_visualizations(snn_results, ann_results, data_info, outp
     # Save metrics to CSV
     final_metrics.to_csv(os.path.join(vis_dir, "final_metrics.csv"), index=False)
     
+    # Add temporal-specific visualizations for temporal datasets
+    if is_temporal:
+        # 5. Temporal Comparison Dashboard
+        from utils.metrics.visualization import plot_temporal_comparison
+        plot_temporal_comparison(
+            ann_history=ann_history,
+            snn_history=snn_history,
+            output_path=os.path.join(vis_dir, "temporal_comparison_dashboard.png"),
+            figsize=(16, 10),
+            dpi=150
+        )
+        
+        # 6. Learning Dynamics
+        from utils.metrics.visualization import plot_learning_dynamics
+        plot_learning_dynamics(
+            ann_history=ann_history,
+            snn_history=snn_history,
+            output_path=os.path.join(vis_dir, "learning_dynamics.png"),
+            figsize=(16, 10),
+            dpi=150
+        )
+        
+        # 7. Temporal Feature Importance (if available)
+        if "class_accuracies" in ann_results and "class_accuracies" in snn_results:
+            from utils.metrics.visualization import plot_temporal_feature_importance
+            plot_temporal_feature_importance(
+                ann_results=ann_results,
+                snn_results=snn_results,
+                output_path=os.path.join(vis_dir, "temporal_feature_importance.png"),
+                figsize=(14, 8),
+                dpi=150
+            )
+            
+        # 8. Error Analysis - Log Scale Comparison
+        plt.figure(figsize=(10, 6))
+        
+        # Calculate error rates (1 - accuracy)
+        ann_errors = [1 - acc for acc in ann_history['test_acc']]
+        snn_errors = [1 - acc for acc in snn_history['test_acc']]
+        
+        # Plot on log scale
+        plt.semilogy(range(1, len(ann_errors) + 1), ann_errors, 'b-', linewidth=2, label='ANN')
+        plt.semilogy(range(1, len(snn_errors) + 1), snn_errors, 'r-', linewidth=2, label='SNN')
+        
+        plt.title('Error Rate Comparison (Log Scale)')
+        plt.xlabel('Epoch')
+        plt.ylabel('Error Rate (1 - Accuracy)')
+        plt.grid(True, alpha=0.3, which='both')
+        plt.legend()
+        plt.tight_layout()
+        
+        plt.savefig(os.path.join(vis_dir, "error_comparison_log.png"), dpi=150)
+        plt.close()
+        
+        # 9. Accuracy Gain Over Time
+        plt.figure(figsize=(10, 6))
+        
+        # Calculate first derivative of accuracy (improvement rate)
+        ann_acc_gain = [ann_history['test_acc'][i] - ann_history['test_acc'][i-1] 
+                      for i in range(1, len(ann_history['test_acc']))]
+        snn_acc_gain = [snn_history['test_acc'][i] - snn_history['test_acc'][i-1] 
+                      for i in range(1, len(snn_history['test_acc']))]
+        
+        # Add zero at beginning for plotting alignment
+        ann_acc_gain = [0] + ann_acc_gain
+        snn_acc_gain = [0] + snn_acc_gain
+        
+        plt.plot(range(1, len(ann_acc_gain) + 1), ann_acc_gain, 'b-', linewidth=2, label='ANN')
+        plt.plot(range(1, len(snn_acc_gain) + 1), snn_acc_gain, 'r-', linewidth=2, label='SNN')
+        
+        plt.title('Learning Rate (Accuracy Gain per Epoch)')
+        plt.xlabel('Epoch')
+        plt.ylabel('Accuracy Improvement')
+        plt.axhline(y=0, color='gray', linestyle='--', alpha=0.5)
+        plt.grid(True, alpha=0.3)
+        plt.legend()
+        plt.tight_layout()
+        
+        plt.savefig(os.path.join(vis_dir, "accuracy_gain.png"), dpi=150)
+        plt.close()
+    
     # Return visualization data for report generation
     return {
         "thresholds": thresholds,
         "ann_convergence": ann_convergence,
         "snn_convergence": snn_convergence,
-        "final_metrics": final_metrics
+        "final_metrics": final_metrics,
+        "is_temporal": is_temporal
     }
 
 def generate_comparison_report(snn_results, ann_results, data_info, vis_data, output_dir):
@@ -710,6 +801,102 @@ def create_comparative_visualizations(dataset_summaries, output_dir):
         plt.text(i, v + 0.1, f"{v:.2f}x", ha='center')
     
     plt.savefig(os.path.join(vis_dir, "training_time_ratio.png"), dpi=150)
+    plt.close()
+    
+    # 4. Box plot comparison
+    plt.figure(figsize=(10, 6))
+    data = pd.DataFrame({
+        'ANN': ann_accs,
+        'SNN': snn_accs
+    })
+    
+    boxplot = sns.boxplot(data=data, palette={'ANN': 'blue', 'SNN': 'red'})
+    boxplot.set_title('Distribution of Model Accuracies')
+    boxplot.set_ylabel('Accuracy')
+    plt.grid(True, alpha=0.3, axis='y')
+    
+    # Add individual points
+    sns.stripplot(data=data, color='black', alpha=0.5, size=7)
+    
+    plt.tight_layout()
+    plt.savefig(os.path.join(vis_dir, "accuracy_distribution.png"), dpi=150)
+    plt.close()
+    
+    # 5. Radar chart comparing SNN vs ANN for different datasets
+    if len(datasets) >= 3:  # Only create radar chart if we have enough datasets
+        fig = plt.figure(figsize=(10, 8))
+        
+        # Number of variables
+        N = len(datasets)
+        
+        # Create angles for each dataset
+        angles = np.linspace(0, 2*np.pi, N, endpoint=False).tolist()
+        angles += angles[:1]  # Close the loop
+        
+        # Add SNN and ANN data, also closing the loop
+        snn_data = snn_accs + [snn_accs[0]]
+        ann_data = ann_accs + [ann_accs[0]]
+        
+        # Plot data
+        ax = plt.subplot(111, polar=True)
+        
+        # Plot SNN data
+        ax.plot(angles, snn_data, 'r-', linewidth=2, label='SNN')
+        ax.fill(angles, snn_data, 'r', alpha=0.1)
+        
+        # Plot ANN data
+        ax.plot(angles, ann_data, 'b-', linewidth=2, label='ANN')
+        ax.fill(angles, ann_data, 'b', alpha=0.1)
+        
+        # Set labels and ticks
+        plt.xticks(angles[:-1], datasets, size=10)
+        
+        # Set y-axis limits
+        plt.ylim(min(min(snn_accs), min(ann_accs))*0.9, 1.0)
+        
+        # Add legend
+        plt.legend(loc='upper right')
+        
+        plt.title('SNN vs ANN Performance Across Datasets')
+        plt.tight_layout()
+        
+        plt.savefig(os.path.join(vis_dir, "radar_comparison.png"), dpi=150)
+        plt.close()
+        
+    # 6. Accuracy vs training time scatter plot
+    plt.figure(figsize=(10, 8))
+    
+    # Create scatter plot
+    plt.scatter([s["ann_train_time"] for s in dataset_summaries], 
+               [s["ann_best_acc"] for s in dataset_summaries], 
+               color='blue', alpha=0.7, s=100, label='ANN')
+    
+    plt.scatter([s["snn_train_time"] for s in dataset_summaries], 
+               [s["snn_best_acc"] for s in dataset_summaries], 
+               color='red', alpha=0.7, s=100, label='SNN')
+    
+    # Add dataset labels to points
+    for i, dataset in enumerate(datasets):
+        plt.annotate(dataset, 
+                    (dataset_summaries[i]["ann_train_time"], dataset_summaries[i]["ann_best_acc"]),
+                    xytext=(5, 5), textcoords='offset points', fontsize=8)
+        
+        plt.annotate(dataset, 
+                    (dataset_summaries[i]["snn_train_time"], dataset_summaries[i]["snn_best_acc"]),
+                    xytext=(5, -10), textcoords='offset points', fontsize=8)
+    
+    # Add reference lines
+    max_time = max(max([s["ann_train_time"] for s in dataset_summaries]), 
+                  max([s["snn_train_time"] for s in dataset_summaries]))
+    
+    plt.xlabel('Training Time (seconds)')
+    plt.ylabel('Accuracy')
+    plt.title('Accuracy vs Training Time Trade-off')
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+    
+    plt.savefig(os.path.join(vis_dir, "accuracy_time_tradeoff.png"), dpi=150)
     plt.close()
 
 def process_dataset(dataset_path, args, conf, device):
