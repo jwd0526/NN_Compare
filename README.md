@@ -11,7 +11,7 @@ This framework enables direct performance comparisons between traditional ANNs a
 - Comprehensive performance analysis and visualization
 - Detailed model comparison metrics
 
-The goal is to provide quantitative insights into the relative strengths and weaknesses of ANNs vs SNNs across different pattern recognition tasks.
+The goal is to provide quantitative insights into the relative strengths and weaknesses of ANNs vs SNNs across different pattern recognition tasks. Recent updates improved temporal dataset complexity to better demonstrate differences between model types and updated convergence thresholds for visualization.
 
 ## Project Structure
 
@@ -96,6 +96,7 @@ NN_Compare/
 - Pandas
 - OmegaConf
 - Scikit-learn
+- Seaborn (for enhanced visualizations)
 
 ### Installation
 
@@ -113,7 +114,7 @@ NN_Compare/
 
 3. Install the required packages:
    ```bash
-   pip install torch numpy matplotlib pandas omegaconf scikit-learn
+   pip install torch numpy matplotlib pandas omegaconf scikit-learn seaborn
    ```
 
 ## Running Benchmarks
@@ -161,13 +162,12 @@ python experiments/run_synthetic_experiments.py --generate
 
 ### Temporal Patterns
 
-Four difficulty tiers are generated:
-- **Tier 1 (Easy)**: Distinct pattern types (regular, burst, synchronous, and oscillatory)
-- **Tier 2 (Medium)**: Variations of the same pattern type with different parameters
-- **Tier 3 (Hard)**: Similar patterns with subtle timing differences
-- **Tier 4 (Expert)**: Nearly identical patterns with minimal statistical differences
+Three difficulty tiers are generated with increased noise and complexity:
+- **Tier 1 (Precise Timing)**: Distinct temporal patterns with 5% noise (up from 2%) 
+- **Tier 2 (Temporal Correlations)**: Similar patterns with different temporal correlations, 12% noise (up from 8%)
+- **Tier 3 (Complex Temporal)**: Highly similar patterns with subtle timing differences, 22% noise (up from 15%)
 
-Additionally, noise variants are created to test robustness.
+These enhanced complexity levels ensure models require more epochs for convergence (approximately 30 epochs vs 10).
 
 ### Spatial Patterns
 
