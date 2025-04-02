@@ -17,99 +17,90 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from models.base_model import SyntheticANN
 
+class SimpleClassifier(nn.Module):
+    """A simple 2-layer classifier with normalized inputs."""
+    
+    def __init__(self, input_size, hidden_size, output_size, dropout_rate=0.5):
+        super().__init__()
+        self.fc1 = nn.Linear(input_size, hidden_size)
+        self.fc2 = nn.Linear(hidden_size, output_size)
+        self.dropout = nn.Dropout(dropout_rate)
+        self.bn = nn.BatchNorm1d(input_size)
+    
+    def forward(self, x):
+        x = self.bn(x)
+        x = F.relu(self.fc1(x))
+        x = self.dropout(x)
+        x = self.fc2(x)
+        return x
+
 class SyntheticANN(SyntheticANN):
     """
-    ANN model for synthetic spike pattern classification.
-    
-    This model is designed to be compared with SNN models on the same datasets.
-    It processes spike pattern data by aggregating spikes over time before
-    feeding them through a standard feedforward neural network.
+    Ultra-simplified ANN model for synthetic spike pattern classification.
     """
     
     def __init__(self, input_size: int, hidden_size: int, output_size: int, 
                  length: int, batch_size: int, dropout_rate: float = 0.3):
         """
-        Initialize the synthetic ANN model.
-        
-        Args:
-            input_size: Number of input neurons
-            hidden_size: Number of neurons in hidden layers
-            output_size: Number of output neurons
-            length: Number of time steps in the simulation (for compatibility with SNN)
-            batch_size: Batch size for training/inference
-            dropout_rate: Dropout rate for regularization
+        Initialize the ANN model.
         """
         super().__init__(input_size, hidden_size, output_size, length, batch_size)
+        
+        # Store model parameters as instance variables
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.output_size = output_size
+        self.length = length
+        self.batch_size = batch_size
         self.dropout_rate = dropout_rate
         
-        # Define the network layers
-        self.fc1 = nn.Linear(input_size, hidden_size)
-        self.dropout1 = nn.Dropout(dropout_rate)
-        self.fc2 = nn.Linear(hidden_size, hidden_size)
-        self.dropout2 = nn.Dropout(dropout_rate)
-        self.fc3 = nn.Linear(hidden_size, output_size)
-        
-        # Initialize weights
-        nn.init.xavier_uniform_(self.fc1.weight)
-        nn.init.xavier_uniform_(self.fc2.weight)
-        nn.init.xavier_uniform_(self.fc3.weight)
+        # Create a simple classifier
+        self.classifier = SimpleClassifier(
+            input_size=input_size,
+            hidden_size=hidden_size,
+            output_size=output_size,
+            dropout_rate=dropout_rate
+        )
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
         Forward pass through the network.
         
         Args:
-            x: Input tensor of shape [batch_size, input_size, length]
-                Contains spike patterns for SNN compatibility
-            
-        Returns:
-            Output tensor of shape [batch_size, output_size, length]
-            Time dimension is repeated for compatibility with SNN
-        """
-        # Process input spikes: We'll use spike count aggregation
-        # Sum over time dimension to get total number of spikes per neuron
-        x_aggregate = torch.sum(x, dim=2)  # shape: [batch_size, input_size]
-        
-        # Alternative input processing methods (uncommented by default):
-        # 1. Mean spike rate over time
-        # x_aggregate = torch.mean(x, dim=2)
-        
-        # 2. Max pooling over time
-        # x_aggregate, _ = torch.max(x, dim=2)
-        
-        # Pass through feedforward network
-        x = F.relu(self.fc1(x_aggregate))
-        x = self.dropout1(x)
-        x = F.relu(self.fc2(x))
-        x = self.dropout2(x)
-        x = self.fc3(x)
-        
-        # For compatibility with SNN comparison, we'll expand to add time dimension 
-        # with the same prediction at each time step
-        x_expanded = x.unsqueeze(-1).repeat(1, 1, self.length)
-        
-        # Add activity to monitors if configured
-        if "output" in self.monitors:
-            self.monitors["output"]["activity"].append(x_expanded.detach())
-        
-        return x_expanded
-    
-    def get_raw_output(self, x: torch.Tensor) -> torch.Tensor:
-        """
-        Get the raw output without the time dimension expansion.
-        
-        Args:
-            x: Input tensor of shape [batch_size, input_size, length]
+            x: Input tensor of shape [batch_size, features] or [batch_size, neurons, time]
             
         Returns:
             Output tensor of shape [batch_size, output_size]
         """
-        x_aggregate = torch.sum(x, dim=2)
+        # If input is 3D [batch, neurons, time], take the sum over time
+        if len(x.shape) == 3:
+            x = torch.sum(x, dim=2)  # [batch, neurons]
         
-        x = F.relu(self.fc1(x_aggregate))
-        x = self.dropout1(x)
-        x = F.relu(self.fc2(x))
-        x = self.dropout2(x)
-        x = self.fc3(x)
+        # Handle input size mismatch
+        batch_size = x.shape[0]
+        if x.shape[1] != self.input_size:
+            if x.shape[1] > self.input_size:
+                # Truncate
+                x = x[:, :self.input_size]
+            else:
+                # Pad
+                padded = torch.zeros(batch_size, self.input_size, device=x.device)
+                padded[:, :x.shape[1]] = x
+                x = padded
+                
+        # Forward pass through classifier
+        output = self.classifier(x)
         
-        return x
+        # Monitor
+        if "output" in self.monitors:
+            self.monitors["output"]["activity"].append(output.detach())
+        
+        return output
+    
+    def get_raw_output(self, x: torch.Tensor) -> torch.Tensor:
+        """Just use the forward method directly."""
+        return self.forward(x)
+    
+    def count_parameters(self):
+        """Count the number of trainable parameters."""
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)

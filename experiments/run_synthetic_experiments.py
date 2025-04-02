@@ -428,8 +428,8 @@ def generate_tiered_temporal_patterns():
             # Each neuron fires at a specific time with minimal jitter
             base_time = 10 + j * 3  # Precise timing between neurons
             
-            # Very small jitter to make it realistic but still precise
-            actual_time = int(base_time + np.random.normal(0, 0.3))
+            # Increased jitter to make it more challenging
+            actual_time = int(base_time + np.random.normal(0, 0.8))
             if 0 <= actual_time < 100:
                 pattern[j, actual_time] = 1.0
                 
@@ -446,7 +446,7 @@ def generate_tiered_temporal_patterns():
             for j in range(20):
                 # Only half the neurons fire in each burst
                 if j % 2 == i % 2:  
-                    spike_time = burst_time + np.random.normal(0, 0.5)
+                    spike_time = burst_time + np.random.normal(0, 1.2)  # Increased jitter
                     spike_time = int(max(0, min(99, spike_time)))
                     pattern[j, spike_time] = 1.0
         
@@ -461,9 +461,9 @@ def generate_tiered_temporal_patterns():
             # Frequency depends on neuron index and slightly varies between samples
             base_freq = 4 + (j % 5) + (i % 3)  # Varied frequencies 
             
-            # Generate pattern with precise intervals
+            # Generate pattern with more variable intervals
             for t in range(10, 90, base_freq):
-                actual_t = int(t + np.random.normal(0, 0.3))  # Very precise timing
+                actual_t = int(t + np.random.normal(0, 0.9))  # Increased timing jitter
                 if 0 <= actual_t < 100:
                     pattern[j, actual_t] = 1.0
         
@@ -481,9 +481,9 @@ def generate_tiered_temporal_patterns():
             # Phase shift creates a temporal code
             phase_shift = (j % 5) * 2  # 0, 2, 4, 6, 8
             
-            # Generate pattern with phase encoding
+            # Generate pattern with phase encoding but more variable timing
             for t in range(phase_shift, 90, base_freq):
-                actual_t = int(t + np.random.normal(0, 0.3))  # Very precise timing
+                actual_t = int(t + np.random.normal(0, 0.9))  # Increased jitter to make patterns harder to distinguish
                 if 0 <= actual_t < 100:
                     pattern[j, actual_t] = 1.0
         
@@ -500,8 +500,8 @@ def generate_tiered_temporal_patterns():
             tier1_labels[idx] = label[0]
             idx += 1
     
-    # Add minimal noise (2%) - keeping temporal patterns precise
-    noise_mask = np.random.random(tier1_patterns.shape) < 0.02
+    # Increase noise from 2% to 5% - making patterns harder to recognize
+    noise_mask = np.random.random(tier1_patterns.shape) < 0.05
     tier1_patterns[noise_mask] = 1.0
     
     # Create subdirectories if they don't exist
@@ -570,8 +570,8 @@ def generate_tiered_temporal_patterns():
             group_time = start_time + group_idx * 15
             
             for neuron_idx in group:
-                # Add noise to individual neuron timing
-                actual_time = int(group_time + np.random.normal(0, 1.0))
+                # Add more noise to individual neuron timing to make pattern harder to detect
+                actual_time = int(group_time + np.random.normal(0, 2.2))  # Increased jitter significantly
                 if 0 <= actual_time < 100:
                     pattern[neuron_idx, actual_time] = 1.0
         
@@ -588,7 +588,7 @@ def generate_tiered_temporal_patterns():
         # Create two clear synchronous bursts
         for sync_time in [sync_time_1, sync_time_2]:
             for j in range(12):  # First 60% of neurons fire synchronously
-                actual_time = int(sync_time + np.random.normal(0, 0.3))  # Less jitter for clearer pattern
+                actual_time = int(sync_time + np.random.normal(0, 1.0))  # Increased jitter making sync less clear
                 if 0 <= actual_time < 100:
                     pattern[j, actual_time] = 1.0
         
@@ -681,9 +681,9 @@ def generate_tiered_temporal_patterns():
             tier2_labels[idx] = label[0]
             idx += 1
     
-    # Add moderate noise (8%) - Enough to challenge ANNs but still make patterns recognizable
-    # Using slightly less noise to ensure the distinctive patterns we created remain clear
-    noise_mask = np.random.random(tier2_patterns.shape) < 0.08
+    # Increase noise from 8% to 12% - Making it much more challenging for pattern recognition
+    # Using higher noise levels to require more training and better temporal processing
+    noise_mask = np.random.random(tier2_patterns.shape) < 0.12
     tier2_patterns[noise_mask] = 1.0
     
     # Save to file
@@ -753,8 +753,8 @@ def generate_tiered_temporal_patterns():
             for interval in intervals:
                 current_time += interval
                 if current_time < 100:
-                    # Add small jitter to make it challenging
-                    actual_time = int(current_time + np.random.normal(0, 0.5))
+                    # Add significant jitter to make it much more challenging
+                    actual_time = int(current_time + np.random.normal(0, 1.4))  # Nearly 3x the original jitter
                     if 0 <= actual_time < 100:
                         pattern[j, actual_time] = 1.0
         
@@ -777,7 +777,7 @@ def generate_tiered_temporal_patterns():
                 for fast_t in range(fast_freq):
                     t = slow_t + fast_t * (slow_freq // (fast_freq + 1))
                     if t < 100:
-                        actual_t = int(t + np.random.normal(0, 0.5))
+                        actual_t = int(t + np.random.normal(0, 1.5))  # Increased jitter by 3x
                         if 0 <= actual_t < 100:
                             pattern[j, actual_t] = 1.0
         
@@ -861,8 +861,9 @@ def generate_tiered_temporal_patterns():
             tier3_labels[idx] = label[0]
             idx += 1
     
-    # Add significant noise (15%) - Making it much more challenging for ANNs but still tractable for SNNs
-    noise_mask = np.random.random(tier3_patterns.shape) < 0.15
+    # Increase noise from 15% to 22% - Making it substantially more difficult, requiring more epochs to converge
+    # This higher noise level will make it very challenging for ANNs and test SNNs' temporal advantage
+    noise_mask = np.random.random(tier3_patterns.shape) < 0.22
     tier3_patterns[noise_mask] = 1.0
     
     # Save to file

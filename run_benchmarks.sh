@@ -58,8 +58,8 @@ if [ "$QUICK_MODE" = true ]; then
     EPOCHS="--epochs 3"
     echo "Running in quick mode with 3 epochs"
 else
-    EPOCHS="--epochs 25"
-    echo "Running in full mode with 25 epochs"
+    EPOCHS="--epochs 40"  # Increased to allow for longer convergence time
+    echo "Running in full mode with 40 epochs (increased for longer convergence)"
 fi
 
 # Display what benchmarks will run
@@ -95,6 +95,8 @@ Step 1: Generating datasets..."
 NEED_TEMPORAL_DATA=false
 if [ "$RUN_TEMPORAL" = true ] && [ ! -f "$DATA_DIR/temporal/datasets/temporal_tier1_precise.npz" ]; then
     NEED_TEMPORAL_DATA=true
+    # Ensure the temporal datasets directory exists
+    mkdir -p "$DATA_DIR/temporal/datasets"
 fi
 
 # Check if we need spatial data
@@ -126,8 +128,40 @@ Step 2: Running temporal pattern benchmarks..."
         EXTRA_FLAGS="--detailed-metrics"
     fi
     
+    # Check if the required temporal datasets exist - directly check the npz files
+    if [ ! -f "$DATA_DIR/temporal/datasets/temporal_tier1_precise.npz" ] || \
+       [ ! -f "$DATA_DIR/temporal/datasets/temporal_tier2_correlation.npz" ] || \
+       [ ! -f "$DATA_DIR/temporal/datasets/temporal_tier3_complex.npz" ]; then
+        echo "Warning: One or more required temporal datasets are missing!"
+        echo "Checking for alternate dataset formats..."
+        
+        # Check if alternate format (synthetic datasets) exists
+        if [ -f "$DATA_DIR/synthetic/simple_synthetic_5class.npz" ] && \
+           [ -f "$DATA_DIR/synthetic/medium_synthetic_5class.npz" ] && \
+           [ -f "$DATA_DIR/synthetic/complex_synthetic_5class.npz" ]; then
+            
+            echo "Found synthetic datasets. Copying to temporal datasets directory..."
+            mkdir -p "$DATA_DIR/temporal/datasets"
+            
+            # Create compatibility links/copies
+            cp -f "$DATA_DIR/synthetic/simple_synthetic_5class.npz" "$DATA_DIR/temporal/datasets/temporal_tier1_precise.npz"
+            cp -f "$DATA_DIR/synthetic/medium_synthetic_5class.npz" "$DATA_DIR/temporal/datasets/temporal_tier2_correlation.npz"
+            cp -f "$DATA_DIR/synthetic/complex_synthetic_5class.npz" "$DATA_DIR/temporal/datasets/temporal_tier3_complex.npz"
+            
+            echo "Dataset compatibility links created successfully."
+        else
+            echo "Error: Required datasets not found. Please generate them first using run_synthetic_experiments.py"
+            echo "Continuing with available datasets, but results may be incomplete."
+        fi
+    fi
+    
+    # Run the dataset fix script to ensure pattern and label dimensions match
+    echo "Checking and fixing dataset dimensions if needed..."
+    python3 ./fix_datasets.py
+    
+    # Now run the benchmark with the prepared datasets
     python3 batch_compare.py \
-        --datadir "$DATA_DIR/synthetic" \
+        --datadir "$DATA_DIR/temporal/datasets" \
         --outdir "$OUTPUT_DIR/temporal_benchmark" \
         --config "$CONFIG_DIR/experiments/temporal_benchmark.yaml" \
         $EPOCHS $EXTRA_FLAGS

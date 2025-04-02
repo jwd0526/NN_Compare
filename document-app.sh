@@ -389,13 +389,28 @@ cat > "$OUTPUT_DIR/index.html" << EOL
 </html>
 EOL
 
-# Copy necessary visualizations
+# Copy necessary visualizations from all possible locations
 mkdir -p "$OUTPUT_DIR/visualizations"
+
+# Try all possible source locations for visualizations
+# First from the main report directory if it exists
 cp -f "$REPORT_DIR"/visualizations/*.png "$OUTPUT_DIR/visualizations/" 2>/dev/null || true
-# If that didn't work, try alternate paths
-if [ ! -f "$OUTPUT_DIR/visualizations/accuracy_comparison.png" ]; then
-    echo "Searching for visualization files in alternative locations..."
+
+# Then from each dataset's visualization directory
+cp -f "$REPORT_DIR"/*/visualizations/*.png "$OUTPUT_DIR/visualizations/" 2>/dev/null || true
+
+# Also check for examples directory
+cp -f "$REPORT_DIR"/*/examples/*.png "$OUTPUT_DIR/visualizations/" 2>/dev/null || true
+
+# If we still don't have all the files, try a recursive find
+if [ ! -f "$OUTPUT_DIR/visualizations/accuracy_comparison.png" ] || \
+   [ ! -f "$OUTPUT_DIR/visualizations/convergence_comparison.png" ] || \
+   [ ! -f "$OUTPUT_DIR/visualizations/error_comparison_log.png" ]; then
+    echo "Searching for visualization files in all locations..."
     find "$REPORT_DIR" -name "*.png" -type f -exec cp -f {} "$OUTPUT_DIR/visualizations/" \; 2>/dev/null || true
+    
+    # Also search in the entire results directory as a fallback
+    find "./results" -name "*.png" ! -path "*/examples/*" -type f -exec cp -f {} "$OUTPUT_DIR/visualizations/" \; 2>/dev/null || true
 fi
 
 # Generate missing visualizations and placeholder images

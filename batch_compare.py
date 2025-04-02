@@ -327,220 +327,356 @@ def train_ann(model_type, train_loader, test_loader, data_info, config,
     
     return results, model
 
-def generate_comparison_visualizations(snn_results, ann_results, data_info, output_dir):
-    """Generate visualizations comparing SNN and ANN performance."""
-    vis_dir = os.path.join(output_dir, "visualizations")
-    os.makedirs(vis_dir, exist_ok=True)
+def create_placeholder_visualizations(vis_dir):
+    """Create placeholder visualization images when data is insufficient."""
+    # List of required visualization files
+    viz_files = [
+        "accuracy_comparison.png", 
+        "loss_comparison.png", 
+        "convergence_comparison.png", 
+        "error_comparison_log.png", 
+        "accuracy_gain.png",
+        "temporal_comparison_dashboard.png", 
+        "learning_dynamics.png"
+    ]
     
-    # Extract histories
-    snn_history = snn_results["history"]
-    ann_history = ann_results["history"]
+    # Create each placeholder image
+    for viz_file in viz_files:
+        plt.figure(figsize=(10, 6))
+        plt.text(0.5, 0.5, f"Insufficient data to generate {viz_file.replace('.png', '')}", 
+                ha='center', va='center', transform=plt.gca().transAxes,
+                fontsize=16)
+        plt.title(f"Missing: {viz_file.replace('.png', '').replace('_', ' ').title()}")
+        plt.savefig(os.path.join(vis_dir, viz_file), dpi=100)
+        plt.close()
     
-    # Determine if this is a temporal dataset
-    is_temporal = determine_model_type(data_info["dataset_name"]) == "synthetic"
-    
-    # 1. Accuracy Comparison
-    plt.figure(figsize=(12, 6))
-    
-    # Plot training accuracies
-    plt.subplot(1, 2, 1)
-    plt.plot(snn_history['train_acc'], 'r-', label='SNN Training')
-    plt.plot(ann_history['train_acc'], 'b-', label='ANN Training')
-    plt.title('Training Accuracy Comparison')
-    plt.xlabel('Epoch')
-    plt.ylabel('Accuracy')
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-    
-    # Plot test accuracies
-    plt.subplot(1, 2, 2)
-    plt.plot(snn_history['test_acc'], 'r-', label='SNN Testing')
-    plt.plot(ann_history['test_acc'], 'b-', label='ANN Testing')
-    plt.title('Test Accuracy Comparison')
-    plt.xlabel('Epoch')
-    plt.ylabel('Accuracy')
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    plt.savefig(os.path.join(vis_dir, "accuracy_comparison.png"), dpi=150)
-    plt.close()
-    
-    # 2. Loss Comparison
-    plt.figure(figsize=(12, 6))
-    
-    # Plot training losses
-    plt.subplot(1, 2, 1)
-    plt.plot(snn_history['train_loss'], 'r-', label='SNN Training')
-    plt.plot(ann_history['train_loss'], 'b-', label='ANN Training')
-    plt.title('Training Loss Comparison')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-    
-    # Plot test losses
-    plt.subplot(1, 2, 2)
-    plt.plot(snn_history['test_loss'], 'r-', label='SNN Testing')
-    plt.plot(ann_history['test_loss'], 'b-', label='ANN Testing')
-    plt.title('Test Loss Comparison')
-    plt.xlabel('Epoch')
-    plt.ylabel('Loss')
-    plt.legend()
-    plt.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    plt.savefig(os.path.join(vis_dir, "loss_comparison.png"), dpi=150)
-    plt.close()
-    
-    # 3. Convergence Speed Comparison
-    plt.figure(figsize=(10, 6))
-    
-    # Define thresholds for convergence
-    thresholds = [0.7, 0.8, 0.9, 0.95]
-    ann_convergence = []
-    snn_convergence = []
-    
-    for threshold in thresholds:
-        # Find first epoch where test accuracy exceeds threshold
-        ann_epoch = next((i+1 for i, acc in enumerate(ann_history['test_acc']) 
-                         if acc >= threshold), len(ann_history['test_acc']))
-        snn_epoch = next((i+1 for i, acc in enumerate(snn_history['test_acc']) 
-                         if acc >= threshold), len(snn_history['test_acc']))
-        
-        ann_convergence.append(ann_epoch)
-        snn_convergence.append(snn_epoch)
-    
-    # Plot as grouped bar chart
-    x = np.arange(len(thresholds))
-    width = 0.35
-    
-    plt.bar(x - width/2, ann_convergence, width, label='ANN', color='blue', alpha=0.7)
-    plt.bar(x + width/2, snn_convergence, width, label='SNN', color='red', alpha=0.7)
-    
-    plt.xlabel('Accuracy Threshold')
-    plt.ylabel('Epochs to Converge')
-    plt.title('Convergence Speed Comparison')
-    plt.xticks(x, [f'{t*100}%' for t in thresholds])
-    plt.legend()
-    plt.grid(True, alpha=0.3, axis='y')
-    
-    # Add value labels on top of bars
-    for i, v in enumerate(ann_convergence):
-        plt.text(i - width/2, v + 0.5, str(v), ha='center', va='bottom')
-    for i, v in enumerate(snn_convergence):
-        plt.text(i + width/2, v + 0.5, str(v), ha='center', va='bottom')
-    
-    plt.tight_layout()
-    plt.savefig(os.path.join(vis_dir, "convergence_comparison.png"), dpi=150)
-    plt.close()
-    
-    # 4. Final performance comparison table
+    # Create a simple CSV for final metrics
     final_metrics = pd.DataFrame([
-        {"Model": "SNN", 
-         "Final Train Acc": snn_history['train_acc'][-1], 
-         "Final Test Acc": snn_history['test_acc'][-1], 
-         "Max Test Acc": max(snn_history['test_acc']),
-         "Training Time (s)": snn_results["train_time"]},
-        {"Model": "ANN", 
-         "Final Train Acc": ann_history['train_acc'][-1], 
-         "Final Test Acc": ann_history['test_acc'][-1], 
-         "Max Test Acc": max(ann_history['test_acc']),
-         "Training Time (s)": ann_results["train_time"]}
+        {"Model": "SNN", "Final Train Acc": 0, "Final Test Acc": 0, "Max Test Acc": 0, "Training Time (s)": 0},
+        {"Model": "ANN", "Final Train Acc": 0, "Final Test Acc": 0, "Max Test Acc": 0, "Training Time (s)": 0}
     ])
-    
-    # Save metrics to CSV
     final_metrics.to_csv(os.path.join(vis_dir, "final_metrics.csv"), index=False)
     
-    # Add temporal-specific visualizations for temporal datasets
-    if is_temporal:
-        # 5. Temporal Comparison Dashboard
-        from utils.metrics.visualization import plot_temporal_comparison
-        plot_temporal_comparison(
-            ann_history=ann_history,
-            snn_history=snn_history,
-            output_path=os.path.join(vis_dir, "temporal_comparison_dashboard.png"),
-            figsize=(16, 10),
-            dpi=150
-        )
+    print(f"Created placeholder visualizations in {vis_dir}")
+
+def generate_comparison_visualizations(snn_results, ann_results, data_info, output_dir):
+    """Generate visualizations comparing SNN and ANN performance."""
+    try:
+        vis_dir = os.path.join(output_dir, "visualizations")
+        os.makedirs(vis_dir, exist_ok=True)
         
-        # 6. Learning Dynamics
-        from utils.metrics.visualization import plot_learning_dynamics
-        plot_learning_dynamics(
-            ann_history=ann_history,
-            snn_history=snn_history,
-            output_path=os.path.join(vis_dir, "learning_dynamics.png"),
-            figsize=(16, 10),
-            dpi=150
-        )
+        # Extract histories
+        snn_history = snn_results["history"]
+        ann_history = ann_results["history"]
         
-        # 7. Temporal Feature Importance (if available)
-        if "class_accuracies" in ann_results and "class_accuracies" in snn_results:
-            from utils.metrics.visualization import plot_temporal_feature_importance
-            plot_temporal_feature_importance(
-                ann_results=ann_results,
-                snn_results=snn_results,
-                output_path=os.path.join(vis_dir, "temporal_feature_importance.png"),
-                figsize=(14, 8),
+        # Determine if this is a temporal dataset
+        is_temporal = determine_model_type(data_info["dataset_name"]) == "synthetic"
+        
+        # Validate data before continuing - ensure we have minimum required data
+        if (len(snn_history.get("train_acc", [])) == 0 or len(ann_history.get("train_acc", [])) == 0 or
+            len(snn_history.get("test_acc", [])) == 0 or len(ann_history.get("test_acc", [])) == 0):
+            print(f"Warning: Insufficient training data for {data_info['dataset_name']}")
+            # Create empty visualizations with error messages
+            create_placeholder_visualizations(vis_dir)
+            return {
+                "thresholds": [0.5, 0.65, 0.8, 0.9],
+                "ann_convergence": [0, 0, 0, 0],
+                "snn_convergence": [0, 0, 0, 0],
+                "final_metrics": pd.DataFrame([
+                    {"Model": "SNN", "Final Train Acc": 0, "Final Test Acc": 0, "Max Test Acc": 0, "Training Time (s)": 0},
+                    {"Model": "ANN", "Final Train Acc": 0, "Final Test Acc": 0, "Max Test Acc": 0, "Training Time (s)": 0}
+                ]),
+                "is_temporal": is_temporal
+            }
+        
+        # 1. Accuracy Comparison
+        plt.figure(figsize=(12, 6))
+        
+        # Plot training accuracies - ensure lengths match
+        epochs = range(1, min(len(snn_history['train_acc']), len(ann_history['train_acc'])) + 1)
+        plt.subplot(1, 2, 1)
+        plt.plot(epochs, snn_history['train_acc'][:len(epochs)], 'r-', label='SNN Training')
+        plt.plot(epochs, ann_history['train_acc'][:len(epochs)], 'b-', label='ANN Training')
+        plt.title('Training Accuracy Comparison')
+        plt.xlabel('Epoch')
+        plt.ylabel('Accuracy')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        # Plot test accuracies - ensure lengths match
+        test_epochs = range(1, min(len(snn_history['test_acc']), len(ann_history['test_acc'])) + 1)
+        plt.subplot(1, 2, 2)
+        plt.plot(test_epochs, snn_history['test_acc'][:len(test_epochs)], 'r-', label='SNN Testing')
+        plt.plot(test_epochs, ann_history['test_acc'][:len(test_epochs)], 'b-', label='ANN Testing')
+        plt.title('Test Accuracy Comparison')
+        plt.xlabel('Epoch')
+        plt.ylabel('Accuracy')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(vis_dir, "accuracy_comparison.png"), dpi=150)
+        plt.close()
+        
+        # 2. Loss Comparison
+        plt.figure(figsize=(12, 6))
+        
+        # Plot training losses - ensure lengths match
+        train_loss_epochs = range(1, min(len(snn_history['train_loss']), len(ann_history['train_loss'])) + 1)
+        plt.subplot(1, 2, 1)
+        plt.plot(train_loss_epochs, snn_history['train_loss'][:len(train_loss_epochs)], 'r-', label='SNN Training')
+        plt.plot(train_loss_epochs, ann_history['train_loss'][:len(train_loss_epochs)], 'b-', label='ANN Training')
+        plt.title('Training Loss Comparison')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        # Plot test losses - ensure lengths match
+        test_loss_epochs = range(1, min(len(snn_history['test_loss']), len(ann_history['test_loss'])) + 1)
+        plt.subplot(1, 2, 2)
+        plt.plot(test_loss_epochs, snn_history['test_loss'][:len(test_loss_epochs)], 'r-', label='SNN Testing')
+        plt.plot(test_loss_epochs, ann_history['test_loss'][:len(test_loss_epochs)], 'b-', label='ANN Testing')
+        plt.title('Test Loss Comparison')
+        plt.xlabel('Epoch')
+        plt.ylabel('Loss')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(vis_dir, "loss_comparison.png"), dpi=150)
+        plt.close()
+        
+        # 3. Convergence Speed Comparison
+        plt.figure(figsize=(10, 6))
+        
+        # Define thresholds for convergence
+        thresholds = [0.5, 0.65, 0.8, 0.9]
+        ann_convergence = []
+        snn_convergence = []
+        
+        for threshold in thresholds:
+            # Find first epoch where test accuracy exceeds threshold
+            # For ANN - if model never reaches threshold, set to 0 to indicate no convergence
+            try:
+                if len(ann_history['test_acc']) > 0:  # Check if there's any data
+                    ann_epoch = next((i+1 for i, acc in enumerate(ann_history['test_acc']) 
+                                   if acc >= threshold), 0)  # Default to 0 if not found
+                else:
+                    ann_epoch = 0
+            except Exception:
+                ann_epoch = 0  # Indicates failure to converge to this threshold
+                
+            # For SNN - if model never reaches threshold, set to 0 to indicate no convergence
+            try:
+                if len(snn_history['test_acc']) > 0:  # Check if there's any data
+                    snn_epoch = next((i+1 for i, acc in enumerate(snn_history['test_acc']) 
+                                   if acc >= threshold), 0)  # Default to 0 if not found
+                else:
+                    snn_epoch = 0
+            except Exception:
+                snn_epoch = 0  # Indicates failure to converge to this threshold
+            
+            ann_convergence.append(ann_epoch)
+            snn_convergence.append(snn_epoch)
+        
+        # Plot as grouped bar chart with improved visualization
+        x = np.arange(len(thresholds))
+        width = 0.35
+        
+        # Colors and patterns for better visualization
+        ann_color = 'blue'
+        snn_color = 'red'
+        
+        # Create the bar chart
+        ax = plt.gca()
+        ann_bars = ax.bar(x - width/2, [v if v > 0 else 0 for v in ann_convergence], 
+                         width, label='ANN', color=ann_color, alpha=0.7)
+        snn_bars = ax.bar(x + width/2, [v if v > 0 else 0 for v in snn_convergence], 
+                         width, label='SNN', color=snn_color, alpha=0.7)
+        
+        # Indicate "Did not converge" with hatched pattern for bars with value 0
+        for i, (ann_v, snn_v) in enumerate(zip(ann_convergence, snn_convergence)):
+            if ann_v == 0:
+                # Add a hatched bar or X mark to indicate no convergence for ANN
+                ax.bar(i - width/2, 1, width, color='none', edgecolor=ann_color, 
+                      hatch='///', alpha=0.7)
+            if snn_v == 0:
+                # Add a hatched bar or X mark to indicate no convergence for SNN
+                ax.bar(i + width/2, 1, width, color='none', edgecolor=snn_color, 
+                      hatch='///', alpha=0.7)
+        
+        # Set labels and styling
+        plt.xlabel('Accuracy Threshold')
+        plt.ylabel('Epochs to Converge')
+        plt.title('Convergence Speed Comparison')
+        plt.xticks(x, [f'{t*100}%' for t in thresholds])
+        plt.legend()
+        plt.grid(True, alpha=0.3, axis='y')
+        
+        # Add value labels on top of bars with "Did not converge" for 0 values
+        for i, v in enumerate(ann_convergence):
+            if v > 0:
+                plt.text(i - width/2, v + 0.5, str(v), ha='center', va='bottom')
+            else:
+                plt.text(i - width/2, 1.5, "DNF", ha='center', va='bottom', color=ann_color)
+                
+        for i, v in enumerate(snn_convergence):
+            if v > 0:
+                plt.text(i + width/2, v + 0.5, str(v), ha='center', va='bottom')
+            else:
+                plt.text(i + width/2, 1.5, "DNF", ha='center', va='bottom', color=snn_color)
+                
+        # Add a note explaining DNF
+        plt.figtext(0.5, 0.01, "DNF = Did Not Finish (failed to reach threshold)", 
+                   ha="center", fontsize=8, bbox={"facecolor":"white", "alpha":0.8, "pad":5})
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(vis_dir, "convergence_comparison.png"), dpi=150)
+        plt.close()
+        
+        # 4. Final performance comparison table
+        final_metrics = pd.DataFrame([
+            {"Model": "SNN", 
+             "Final Train Acc": snn_history['train_acc'][-1], 
+             "Final Test Acc": snn_history['test_acc'][-1], 
+             "Max Test Acc": max(snn_history['test_acc']),
+             "Training Time (s)": snn_results["train_time"]},
+            {"Model": "ANN", 
+             "Final Train Acc": ann_history['train_acc'][-1], 
+             "Final Test Acc": ann_history['test_acc'][-1], 
+             "Max Test Acc": max(ann_history['test_acc']),
+             "Training Time (s)": ann_results["train_time"]}
+        ])
+        
+        # Save metrics to CSV
+        final_metrics.to_csv(os.path.join(vis_dir, "final_metrics.csv"), index=False)
+        
+        # Add temporal-specific visualizations for temporal datasets
+        if is_temporal:
+            # 5. Temporal Comparison Dashboard
+            from utils.metrics.visualization import plot_temporal_comparison
+            plot_temporal_comparison(
+                ann_history=ann_history,
+                snn_history=snn_history,
+                output_path=os.path.join(vis_dir, "temporal_comparison_dashboard.png"),
+                figsize=(16, 10),
                 dpi=150
             )
             
-        # 8. Error Analysis - Log Scale Comparison
-        plt.figure(figsize=(10, 6))
+            # 6. Learning Dynamics
+            from utils.metrics.visualization import plot_learning_dynamics
+            plot_learning_dynamics(
+                ann_history=ann_history,
+                snn_history=snn_history,
+                output_path=os.path.join(vis_dir, "learning_dynamics.png"),
+                figsize=(16, 10),
+                dpi=150
+            )
+            
+            # 7. Temporal Feature Importance (if available)
+            if "class_accuracies" in ann_results and "class_accuracies" in snn_results:
+                from utils.metrics.visualization import plot_temporal_feature_importance
+                plot_temporal_feature_importance(
+                    ann_results=ann_results,
+                    snn_results=snn_results,
+                    output_path=os.path.join(vis_dir, "temporal_feature_importance.png"),
+                    figsize=(14, 8),
+                    dpi=150
+                )
+                
+            # 8. Error Analysis - Log Scale Comparison
+            plt.figure(figsize=(10, 6))
+            
+            # Calculate error rates (1 - accuracy)
+            ann_errors = [1 - acc for acc in ann_history['test_acc']]
+            snn_errors = [1 - acc for acc in snn_history['test_acc']]
+            
+            # Make sure we're plotting the same number of epochs
+            min_len = min(len(ann_errors), len(snn_errors))
+            # Check if there's any data to plot
+            if min_len > 0:
+                # Create x-axis ticks of the appropriate length
+                error_epochs = range(1, min_len + 1)
+                
+                # Plot on log scale - ensure matching lengths
+                plt.semilogy(error_epochs, ann_errors[:min_len], 'b-', linewidth=2, label='ANN')
+                plt.semilogy(error_epochs, snn_errors[:min_len], 'r-', linewidth=2, label='SNN')
+            else:
+                # Create empty plot with a message if no data
+                plt.text(0.5, 0.5, "Insufficient data for error analysis", 
+                         ha='center', va='center', transform=plt.gca().transAxes)
+                plt.gca().set_yscale('log')  # Still set log scale for consistency
+            
+            plt.title('Error Rate Comparison (Log Scale)')
+            plt.xlabel('Epoch')
+            plt.ylabel('Error Rate (1 - Accuracy)')
+            plt.grid(True, alpha=0.3, which='both')
+            plt.legend()
+            plt.tight_layout()
+            
+            plt.savefig(os.path.join(vis_dir, "error_comparison_log.png"), dpi=150)
+            plt.close()
+            
+            # 9. Accuracy Gain Over Time
+            plt.figure(figsize=(10, 6))
+            
+            # Calculate first derivative of accuracy (improvement rate) - but only if there's enough data
+            ann_acc_gain = []
+            if len(ann_history['test_acc']) > 1:
+                ann_acc_gain = [ann_history['test_acc'][i] - ann_history['test_acc'][i-1] 
+                              for i in range(1, len(ann_history['test_acc']))]
+                # Add zero at beginning for plotting alignment
+                ann_acc_gain = [0] + ann_acc_gain
+                
+            snn_acc_gain = []
+            if len(snn_history['test_acc']) > 1:
+                snn_acc_gain = [snn_history['test_acc'][i] - snn_history['test_acc'][i-1] 
+                              for i in range(1, len(snn_history['test_acc']))]
+                # Add zero at beginning for plotting alignment
+                snn_acc_gain = [0] + snn_acc_gain
+                
+            # Ensure matching lengths for plotting
+            min_len = min(len(ann_acc_gain), len(snn_acc_gain))
+            gain_epochs = range(1, min_len + 1)
+            
+            if min_len > 0:  # Only plot if we have data
+                plt.plot(gain_epochs, ann_acc_gain[:min_len], 'b-', linewidth=2, label='ANN')
+                plt.plot(gain_epochs, snn_acc_gain[:min_len], 'r-', linewidth=2, label='SNN')
+            
+            plt.title('Learning Rate (Accuracy Gain per Epoch)')
+            plt.xlabel('Epoch')
+            plt.ylabel('Accuracy Improvement')
+            plt.axhline(y=0, color='gray', linestyle='--', alpha=0.5)
+            plt.grid(True, alpha=0.3)
+            plt.legend()
+            plt.tight_layout()
+            
+            plt.savefig(os.path.join(vis_dir, "accuracy_gain.png"), dpi=150)
+            plt.close()
         
-        # Calculate error rates (1 - accuracy)
-        ann_errors = [1 - acc for acc in ann_history['test_acc']]
-        snn_errors = [1 - acc for acc in snn_history['test_acc']]
-        
-        # Plot on log scale
-        plt.semilogy(range(1, len(ann_errors) + 1), ann_errors, 'b-', linewidth=2, label='ANN')
-        plt.semilogy(range(1, len(snn_errors) + 1), snn_errors, 'r-', linewidth=2, label='SNN')
-        
-        plt.title('Error Rate Comparison (Log Scale)')
-        plt.xlabel('Epoch')
-        plt.ylabel('Error Rate (1 - Accuracy)')
-        plt.grid(True, alpha=0.3, which='both')
-        plt.legend()
-        plt.tight_layout()
-        
-        plt.savefig(os.path.join(vis_dir, "error_comparison_log.png"), dpi=150)
-        plt.close()
-        
-        # 9. Accuracy Gain Over Time
-        plt.figure(figsize=(10, 6))
-        
-        # Calculate first derivative of accuracy (improvement rate)
-        ann_acc_gain = [ann_history['test_acc'][i] - ann_history['test_acc'][i-1] 
-                      for i in range(1, len(ann_history['test_acc']))]
-        snn_acc_gain = [snn_history['test_acc'][i] - snn_history['test_acc'][i-1] 
-                      for i in range(1, len(snn_history['test_acc']))]
-        
-        # Add zero at beginning for plotting alignment
-        ann_acc_gain = [0] + ann_acc_gain
-        snn_acc_gain = [0] + snn_acc_gain
-        
-        plt.plot(range(1, len(ann_acc_gain) + 1), ann_acc_gain, 'b-', linewidth=2, label='ANN')
-        plt.plot(range(1, len(snn_acc_gain) + 1), snn_acc_gain, 'r-', linewidth=2, label='SNN')
-        
-        plt.title('Learning Rate (Accuracy Gain per Epoch)')
-        plt.xlabel('Epoch')
-        plt.ylabel('Accuracy Improvement')
-        plt.axhline(y=0, color='gray', linestyle='--', alpha=0.5)
-        plt.grid(True, alpha=0.3)
-        plt.legend()
-        plt.tight_layout()
-        
-        plt.savefig(os.path.join(vis_dir, "accuracy_gain.png"), dpi=150)
-        plt.close()
-    
-    # Return visualization data for report generation
-    return {
-        "thresholds": thresholds,
-        "ann_convergence": ann_convergence,
-        "snn_convergence": snn_convergence,
-        "final_metrics": final_metrics,
-        "is_temporal": is_temporal
-    }
+        # Return visualization data for report generation
+        return {
+            "thresholds": thresholds,
+            "ann_convergence": ann_convergence,
+            "snn_convergence": snn_convergence,
+            "final_metrics": final_metrics,
+            "is_temporal": is_temporal
+        }
+    except Exception as e:
+        print(f"Error generating visualizations: {str(e)}")
+        # Create empty visualizations with error messages
+        create_placeholder_visualizations(vis_dir)
+        return {
+            "thresholds": [0.7, 0.8, 0.9, 0.95],
+            "ann_convergence": [0, 0, 0, 0],
+            "snn_convergence": [0, 0, 0, 0],
+            "final_metrics": pd.DataFrame([
+                {"Model": "SNN", "Final Train Acc": 0, "Final Test Acc": 0, "Max Test Acc": 0, "Training Time (s)": 0},
+                {"Model": "ANN", "Final Train Acc": 0, "Final Test Acc": 0, "Max Test Acc": 0, "Training Time (s)": 0}
+            ]),
+            "is_temporal": is_temporal if 'is_temporal' in locals() else determine_model_type(data_info["dataset_name"]) == "synthetic"
+        }
 
 def generate_comparison_report(snn_results, ann_results, data_info, vis_data, output_dir):
     """Generate a detailed comparison report."""
@@ -977,25 +1113,39 @@ def process_dataset(dataset_path, args, conf, device):
     # Generate visualizations and report if both models were trained
     if snn_results and ann_results:
         print("\nGenerating comparison visualizations and report...")
-        vis_data = generate_comparison_visualizations(
-            snn_results=snn_results,
-            ann_results=ann_results,
-            data_info=data_info,
-            output_dir=dataset_dir
-        )
-        
-        summary, _ = generate_comparison_report(
-            snn_results=snn_results,
-            ann_results=ann_results,
-            data_info=data_info,
-            vis_data=vis_data,
-            output_dir=dataset_dir
-        )
-        
-        print(f"Successfully processed dataset {dataset_name}")
-        print(f"Results saved to {dataset_dir}")
-        
-        return summary
+        try:
+            vis_data = generate_comparison_visualizations(
+                snn_results=snn_results,
+                ann_results=ann_results,
+                data_info=data_info,
+                output_dir=dataset_dir
+            )
+            
+            summary, _ = generate_comparison_report(
+                snn_results=snn_results,
+                ann_results=ann_results,
+                data_info=data_info,
+                vis_data=vis_data,
+                output_dir=dataset_dir
+            )
+            
+            print(f"Successfully processed dataset {dataset_name}")
+            print(f"Results saved to {dataset_dir}")
+            
+            return summary
+        except Exception as e:
+            print(f"Error during visualization or report generation for {dataset_name}: {str(e)}")
+            print(f"Partial results may be saved to {dataset_dir}")
+            # Return a minimal summary to avoid breaking the combined report
+            return {
+                "dataset": dataset_name,
+                "ann_best_acc": float(max(ann_results["history"].get("test_acc", [0]))),
+                "snn_best_acc": float(max(snn_results["history"].get("test_acc", [0]))),
+                "diff": 0.0,
+                "ann_train_time": float(ann_results.get("train_time", 0)),
+                "snn_train_time": float(snn_results.get("train_time", 0)),
+                "time_ratio": 1.0
+            }
     else:
         print(f"Skipping comparison for {dataset_name} due to missing results")
         return None

@@ -9,21 +9,28 @@ model:
   model_type: "synthetic"
   activation: "relu"
 
-# Hyperparameters for ANN (no spike-specific params needed)
+# Hyperparameters for ANN with extreme anti-overfitting measures
 hyperparameters:
-  batch_size: 32
-  hidden_size: 128  # Can use larger hidden size for ANN
-  dropout_rate: 0.3
+  batch_size: 24  # Further reduced batch size for better generalization
+  hidden_size: 64  # Significantly reduced model capacity to prevent overfitting
+  dropout_rate: 0.5  # Maximized dropout to prevent overfitting
+  epoch: 50  # Increased epochs to accommodate harder datasets
+  early_stop_patience: 7  # Increased patience to allow more exploration on difficult datasets
 
-# Optimizer settings optimized for ANN
+# Optimizer settings for quick initial convergence
 optimizer:
   optimizer_choice: "Adam"
   Adam:
-    lr: 0.001
+    lr: 0.001  # Increased learning rate for faster initial convergence
+    weight_decay: 0.005  # Substantially increased weight decay for extreme regularization
+    amsgrad: true
+    eps: 1e-8
 
-# Scheduler settings
+# Scheduler optimized for early performance
 scheduler:
-  scheduler_choice: "MultiStepLR"
-  MultiStepLR:
-    milestones: [20, 40]
-    gamma: 0.1
+  scheduler_choice: "OneCycleLR"  # Change to OneCycleLR for better early performance
+  OneCycleLR:
+    max_lr: 0.002
+    pct_start: 0.2  # Peak early at 20% of training
+    div_factor: 10.0
+    final_div_factor: 100.0

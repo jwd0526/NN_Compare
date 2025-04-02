@@ -370,25 +370,54 @@ def plot_temporal_comparison(ann_history: Dict[str, List[float]],
     fig = plt.figure(figsize=figsize)
     gs = GridSpec(2, 2, figure=fig)
     
+    # Get test accuracies with safe defaults
+    ann_test_acc = ann_history.get('test_acc', [])
+    snn_test_acc = snn_history.get('test_acc', [])
+    
+    # Ensure we plot only as many epochs as we have data for both models
+    min_epochs = min(len(ann_test_acc), len(snn_test_acc))
+    
     # 1. Learning Curve Comparison (top left)
     ax1 = fig.add_subplot(gs[0, 0])
-    epochs = range(1, len(ann_history['test_acc']) + 1)
     
-    ax1.plot(epochs, ann_history['test_acc'], 'b-', linewidth=2, label='ANN')
-    ax1.plot(epochs, snn_history['test_acc'], 'r-', linewidth=2, label='SNN')
-    
-    # Add learning rate markers if available
-    if 'lr' in ann_history and 'lr' in snn_history:
-        ax2 = ax1.twinx()
-        ax2.plot(epochs, ann_history['lr'], 'b--', alpha=0.5, linewidth=1, label='ANN LR')
-        ax2.plot(epochs, snn_history['lr'], 'r--', alpha=0.5, linewidth=1, label='SNN LR')
-        ax2.set_ylabel('Learning Rate')
-        ax2.tick_params(axis='y', labelcolor='gray')
+    if min_epochs > 0:
+        epochs = range(1, min_epochs + 1)
+        
+        # Plot only the data we have for both models
+        ax1.plot(epochs, ann_test_acc[:min_epochs], 'b-', linewidth=2, label='ANN')
+        ax1.plot(epochs, snn_test_acc[:min_epochs], 'r-', linewidth=2, label='SNN')
+        
+        # Add learning rate markers if available and if we have data to plot
+        ann_lr = ann_history.get('lr', [])
+        snn_lr = snn_history.get('lr', [])
+        
+        if len(ann_lr) > 0 and len(snn_lr) > 0:
+            # Make sure we have enough learning rate data to match our epochs
+            lr_min_len = min(min_epochs, len(ann_lr), len(snn_lr))
+            
+            if lr_min_len > 0:
+                ax2 = ax1.twinx()
+                ax2.plot(epochs[:lr_min_len], ann_lr[:lr_min_len], 'b--', alpha=0.5, linewidth=1, label='ANN LR')
+                ax2.plot(epochs[:lr_min_len], snn_lr[:lr_min_len], 'r--', alpha=0.5, linewidth=1, label='SNN LR')
+                ax2.set_ylabel('Learning Rate')
+                ax2.tick_params(axis='y', labelcolor='gray')
+                
+                # Add second legend for learning rates
+                lines, labels = ax1.get_legend_handles_labels()
+                lines2, labels2 = ax2.get_legend_handles_labels()
+                ax1.legend(lines + lines2, labels + labels2, loc='lower right')
+            else:
+                ax1.legend(loc='lower right')
+        else:
+            ax1.legend(loc='lower right')
+    else:
+        # Add placeholder text if no data
+        ax1.text(0.5, 0.5, "Insufficient accuracy data", 
+                ha='center', va='center', transform=ax1.transAxes)
     
     ax1.set_title('Test Accuracy Learning Curves')
     ax1.set_xlabel('Epoch')
     ax1.set_ylabel('Accuracy')
-    ax1.legend(loc='lower right')
     ax1.grid(True, alpha=0.3)
     ax1.xaxis.set_major_locator(MaxNLocator(integer=True))
     
@@ -396,37 +425,54 @@ def plot_temporal_comparison(ann_history: Dict[str, List[float]],
     ax2 = fig.add_subplot(gs[0, 1])
     
     # Define convergence thresholds
-    thresholds = [0.6, 0.7, 0.8, 0.9]
+    thresholds = [0.5, 0.65, 0.8, 0.9]
     ann_epochs_to_converge = []
     snn_epochs_to_converge = []
     
-    for threshold in thresholds:
-        # Find first epoch where accuracy exceeds threshold
-        try:
-            ann_epoch = next(i+1 for i, acc in enumerate(ann_history['test_acc']) if acc >= threshold)
-        except StopIteration:
-            ann_epoch = len(ann_history['test_acc'])
-            
-        try:
-            snn_epoch = next(i+1 for i, acc in enumerate(snn_history['test_acc']) if acc >= threshold)
-        except StopIteration:
-            snn_epoch = len(snn_history['test_acc'])
-            
-        ann_epochs_to_converge.append(ann_epoch)
-        snn_epochs_to_converge.append(snn_epoch)
+    # Only analyze if we have data
+    if min_epochs > 0:
+        for threshold in thresholds:
+            # Find first epoch where accuracy exceeds threshold
+            try:
+                # Look for the first epoch where accuracy exceeds threshold
+                ann_epoch = next((i+1 for i, acc in enumerate(ann_test_acc) if acc >= threshold), min_epochs)
+            except (StopIteration, Exception):
+                ann_epoch = min_epochs
+                
+            try:
+                # Look for the first epoch where accuracy exceeds threshold
+                snn_epoch = next((i+1 for i, acc in enumerate(snn_test_acc) if acc >= threshold), min_epochs)
+            except (StopIteration, Exception):
+                snn_epoch = min_epochs
+                
+            ann_epochs_to_converge.append(ann_epoch)
+            snn_epochs_to_converge.append(snn_epoch)
+    else:
+        # If no data, just use empty lists with zeros
+        ann_epochs_to_converge = [0, 0, 0, 0]
+        snn_epochs_to_converge = [0, 0, 0, 0]
     
     # Plot as grouped bar chart
     x = np.arange(len(thresholds))
     width = 0.35
     
-    ax2.bar(x - width/2, ann_epochs_to_converge, width, label='ANN', color='blue', alpha=0.7)
-    ax2.bar(x + width/2, snn_epochs_to_converge, width, label='SNN', color='red', alpha=0.7)
+    # Create bars - if value is 0 or equal to min_epochs (didn't converge), don't show bar or show special marker
+    ax2.bar(x - width/2, [v if v > 0 and v < min_epochs else 0 for v in ann_epochs_to_converge], 
+            width, label='ANN', color='blue', alpha=0.7)
+    ax2.bar(x + width/2, [v if v > 0 and v < min_epochs else 0 for v in snn_epochs_to_converge], 
+            width, label='SNN', color='red', alpha=0.7)
     
     # Add values on top of bars
     for i, v in enumerate(ann_epochs_to_converge):
-        ax2.text(i - width/2, v + 0.3, str(v), ha='center', va='bottom', fontsize=9)
+        if v > 0 and v < min_epochs:
+            ax2.text(i - width/2, v + 0.3, str(v), ha='center', va='bottom', fontsize=9)
+        else:
+            ax2.text(i - width/2, 0.5, "DNF", ha='center', va='bottom', color='blue', fontsize=9)
     for i, v in enumerate(snn_epochs_to_converge):
-        ax2.text(i + width/2, v + 0.3, str(v), ha='center', va='bottom', fontsize=9)
+        if v > 0 and v < min_epochs:
+            ax2.text(i + width/2, v + 0.3, str(v), ha='center', va='bottom', fontsize=9)
+        else:
+            ax2.text(i + width/2, 0.5, "DNF", ha='center', va='bottom', color='red', fontsize=9)
     
     ax2.set_title('Epochs to Convergence')
     ax2.set_xlabel('Accuracy Threshold')
@@ -439,13 +485,37 @@ def plot_temporal_comparison(ann_history: Dict[str, List[float]],
     # 3. Error Analysis (bottom left)
     ax3 = fig.add_subplot(gs[1, 0])
     
-    # Calculate errors
-    ann_errors = [1 - acc for acc in ann_history['test_acc']]
-    snn_errors = [1 - acc for acc in snn_history['test_acc']]
-    
-    # Use log scale for errors
-    ax3.semilogy(epochs, ann_errors, 'b-', linewidth=2, label='ANN')
-    ax3.semilogy(epochs, snn_errors, 'r-', linewidth=2, label='SNN')
+    # Only create plot if we have data
+    if min_epochs > 0:
+        # Calculate errors
+        ann_errors = [1 - acc for acc in ann_test_acc[:min_epochs]]
+        snn_errors = [1 - acc for acc in snn_test_acc[:min_epochs]]
+        
+        # Set up log scale
+        ax3.set_yscale('log')
+        
+        # Use log scale for errors but handle potential zeros
+        # Check if we have any valid error values to plot that won't cause log scale issues
+        valid_ann_errors = [e for e in ann_errors if e > 0]
+        valid_snn_errors = [e for e in snn_errors if e > 0]
+        
+        if valid_ann_errors and valid_snn_errors:
+            # Plot only non-zero errors
+            ax3.semilogy(epochs, [max(e, 1e-6) for e in ann_errors], 'b-', linewidth=2, label='ANN')
+            ax3.semilogy(epochs, [max(e, 1e-6) for e in snn_errors], 'r-', linewidth=2, label='SNN')
+        else:
+            # Add a message if we have errors but they're all zero
+            if ann_errors and snn_errors:
+                ax3.text(0.5, 0.5, "Error rates too small for log scale", 
+                      ha='center', va='center', transform=ax3.transAxes)
+            else:
+                ax3.text(0.5, 0.5, "Insufficient error data", 
+                      ha='center', va='center', transform=ax3.transAxes)
+    else:
+        # Add placeholder text if no data
+        ax3.text(0.5, 0.5, "Insufficient data for error analysis", 
+                ha='center', va='center', transform=ax3.transAxes)
+        ax3.set_yscale('log')  # Still set log scale for consistency
     
     ax3.set_title('Error Rate (Log Scale)')
     ax3.set_xlabel('Epoch')
@@ -457,31 +527,71 @@ def plot_temporal_comparison(ann_history: Dict[str, List[float]],
     # 4. Relative Performance Analysis (bottom right)
     ax4 = fig.add_subplot(gs[1, 1])
     
-    # Calculate ratio of SNN to ANN accuracy
-    accuracy_ratio = [snn/ann if ann > 0 else 1 for snn, ann in zip(snn_history['test_acc'], ann_history['test_acc'])]
-    
-    ax4.plot(epochs, accuracy_ratio, 'g-', linewidth=2)
-    ax4.axhline(y=1.0, color='gray', linestyle='--', alpha=0.7)
-    
-    # Color regions above/below the equality line
-    ax4.fill_between(epochs, accuracy_ratio, 1, where=[r > 1 for r in accuracy_ratio], 
-                    alpha=0.2, color='green', label='SNN better')
-    ax4.fill_between(epochs, accuracy_ratio, 1, where=[r <= 1 for r in accuracy_ratio], 
-                    alpha=0.2, color='red', label='ANN better')
-    
-    # Add final ratio
-    final_ratio = accuracy_ratio[-1]
-    ax4.annotate(f'Final Ratio: {final_ratio:.3f}x', 
-                xy=(epochs[-1], final_ratio),
-                xytext=(5, 0), textcoords='offset points',
-                fontsize=10, fontweight='bold')
+    # Only create plot if we have data
+    if min_epochs > 0:
+        # Calculate ratio of SNN to ANN accuracy - handle zeros safely
+        accuracy_ratio = []
+        for snn, ann in zip(snn_test_acc[:min_epochs], ann_test_acc[:min_epochs]):
+            if ann > 0:
+                accuracy_ratio.append(snn/ann)
+            else:
+                # If ANN accuracy is 0, check SNN accuracy too
+                if snn > 0:
+                    # SNN is performing, ANN isn't - set a high ratio
+                    accuracy_ratio.append(2.0)  # Using 2.0 to indicate SNN significantly better
+                else:
+                    # Neither is performing - neutral
+                    accuracy_ratio.append(1.0)
+        
+        # Check if we have any usable ratio data
+        if accuracy_ratio:
+            ax4.plot(epochs, accuracy_ratio, 'g-', linewidth=2)
+            ax4.axhline(y=1.0, color='gray', linestyle='--', alpha=0.7)
+            
+            # Check if we have both types of ratios to create fill_between
+            has_snn_better = any(r > 1 for r in accuracy_ratio)
+            has_ann_better = any(r < 1 for r in accuracy_ratio)
+            
+            # Only fill areas where there's actually a difference
+            if has_snn_better:
+                ax4.fill_between(epochs, accuracy_ratio, 1, where=[r > 1 for r in accuracy_ratio], 
+                             alpha=0.2, color='green', label='SNN better')
+            
+            if has_ann_better:
+                ax4.fill_between(epochs, accuracy_ratio, 1, where=[r < 1 for r in accuracy_ratio], 
+                             alpha=0.2, color='red', label='ANN better')
+            
+            # Add final ratio if we have data
+            final_ratio = accuracy_ratio[-1]
+            ax4.annotate(f'Final Ratio: {final_ratio:.3f}x', 
+                        xy=(epochs[-1], final_ratio),
+                        xytext=(5, 0), textcoords='offset points',
+                        fontsize=10, fontweight='bold')
+            
+            # Only add legend if we have entries
+            legend_items = []
+            if has_snn_better:
+                legend_items.append('SNN better')
+            if has_ann_better:
+                legend_items.append('ANN better')
+                
+            if legend_items:
+                ax4.legend(loc='upper right')
+        else:
+            ax4.text(0.5, 0.5, "Could not calculate valid ratios", 
+                    ha='center', va='center', transform=ax4.transAxes)
+            ax4.axhline(y=1.0, color='gray', linestyle='--', alpha=0.7)
+    else:
+        # Add placeholder text if no data
+        ax4.text(0.5, 0.5, "Insufficient data for ratio analysis", 
+                ha='center', va='center', transform=ax4.transAxes)
+        ax4.axhline(y=1.0, color='gray', linestyle='--', alpha=0.7)
     
     ax4.set_title('SNN/ANN Accuracy Ratio')
     ax4.set_xlabel('Epoch')
     ax4.set_ylabel('Ratio (SNN ÷ ANN)')
     ax4.grid(True, alpha=0.3)
     ax4.xaxis.set_major_locator(MaxNLocator(integer=True))
-    ax4.legend(loc='upper right')
     
     plt.tight_layout()
     
@@ -646,94 +756,207 @@ def plot_learning_dynamics(ann_history: Dict[str, List[float]],
     fig = plt.figure(figsize=figsize)
     gs = GridSpec(2, 3, figure=fig)
     
-    # Extract data
-    epochs = range(1, len(ann_history['train_acc']) + 1)
+    # Ensure keys exist in both histories with safe defaults
+    ann_train_acc = ann_history.get('train_acc', [])
+    snn_train_acc = snn_history.get('train_acc', [])
+    ann_test_acc = ann_history.get('test_acc', [])
+    snn_test_acc = snn_history.get('test_acc', [])
+    ann_train_loss = ann_history.get('train_loss', [])
+    snn_train_loss = snn_history.get('train_loss', [])
+    ann_test_loss = ann_history.get('test_loss', [])
+    snn_test_loss = snn_history.get('test_loss', [])
+    
+    # Determine how many epochs of data we can plot based on available data
+    min_train_epochs = min(len(ann_train_acc), len(snn_train_acc))
+    min_test_epochs = min(len(ann_test_acc), len(snn_test_acc))
+    min_train_loss_epochs = min(len(ann_train_loss), len(snn_train_loss))
+    min_test_loss_epochs = min(len(ann_test_loss), len(snn_test_loss))
+    
+    # Only proceed with plotting if we have enough data
+    if min_train_epochs == 0 and min_test_epochs == 0:
+        # Create a message indicating insufficient data
+        plt.figtext(0.5, 0.5, 
+                   "Insufficient data for learning dynamics visualization",
+                   ha='center', va='center',
+                   fontsize=16, fontweight='bold')
+        
+        # Save plot
+        if output_path:
+            os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+            plt.savefig(output_path, dpi=dpi, bbox_inches='tight')
+            print(f"Learning dynamics analysis saved to {output_path}")
+        
+        if show:
+            plt.show()
+        else:
+            plt.close()
+            
+        return fig
     
     # 1. Training Accuracy (top left)
     ax1 = fig.add_subplot(gs[0, 0])
-    ax1.plot(epochs, ann_history['train_acc'], 'b-', linewidth=2, label='ANN')
-    ax1.plot(epochs, snn_history['train_acc'], 'r-', linewidth=2, label='SNN')
     
-    ax1.set_title('Training Accuracy')
-    ax1.set_xlabel('Epoch')
-    ax1.set_ylabel('Accuracy')
-    ax1.legend(loc='lower right')
-    ax1.grid(True, alpha=0.3)
-    ax1.xaxis.set_major_locator(MaxNLocator(integer=True))
+    if min_train_epochs > 0:
+        # Extract data - use only as many epochs as we have data for both models
+        train_epochs = range(1, min_train_epochs + 1)
+        
+        ax1.plot(train_epochs, ann_train_acc[:min_train_epochs], 'b-', linewidth=2, label='ANN')
+        ax1.plot(train_epochs, snn_train_acc[:min_train_epochs], 'r-', linewidth=2, label='SNN')
+        
+        ax1.set_title('Training Accuracy')
+        ax1.set_xlabel('Epoch')
+        ax1.set_ylabel('Accuracy')
+        ax1.legend(loc='lower right')
+        ax1.grid(True, alpha=0.3)
+        ax1.xaxis.set_major_locator(MaxNLocator(integer=True))
+    else:
+        ax1.text(0.5, 0.5, "Insufficient training accuracy data", 
+                ha='center', va='center', transform=ax1.transAxes)
+        ax1.set_title('Training Accuracy')
     
     # 2. Test Accuracy (top middle)
     ax2 = fig.add_subplot(gs[0, 1])
-    ax2.plot(epochs, ann_history['test_acc'], 'b-', linewidth=2, label='ANN')
-    ax2.plot(epochs, snn_history['test_acc'], 'r-', linewidth=2, label='SNN')
     
-    ax2.set_title('Test Accuracy')
-    ax2.set_xlabel('Epoch')
-    ax2.set_ylabel('Accuracy')
-    ax2.legend(loc='lower right')
-    ax2.grid(True, alpha=0.3)
-    ax2.xaxis.set_major_locator(MaxNLocator(integer=True))
+    if min_test_epochs > 0:
+        test_epochs = range(1, min_test_epochs + 1)
+        
+        ax2.plot(test_epochs, ann_test_acc[:min_test_epochs], 'b-', linewidth=2, label='ANN')
+        ax2.plot(test_epochs, snn_test_acc[:min_test_epochs], 'r-', linewidth=2, label='SNN')
+        
+        ax2.set_title('Test Accuracy')
+        ax2.set_xlabel('Epoch')
+        ax2.set_ylabel('Accuracy')
+        ax2.legend(loc='lower right')
+        ax2.grid(True, alpha=0.3)
+        ax2.xaxis.set_major_locator(MaxNLocator(integer=True))
+    else:
+        ax2.text(0.5, 0.5, "Insufficient test accuracy data", 
+                ha='center', va='center', transform=ax2.transAxes)
+        ax2.set_title('Test Accuracy')
     
     # 3. Accuracy Gap (top right)
     ax3 = fig.add_subplot(gs[0, 2])
-    ann_gap = [train - test for train, test in zip(ann_history['train_acc'], ann_history['test_acc'])]
-    snn_gap = [train - test for train, test in zip(snn_history['train_acc'], snn_history['test_acc'])]
     
-    ax3.plot(epochs, ann_gap, 'b-', linewidth=2, label='ANN')
-    ax3.plot(epochs, snn_gap, 'r-', linewidth=2, label='SNN')
-    ax3.axhline(y=0, color='gray', linestyle='--', alpha=0.5)
+    # Calculate accuracy gaps between train and test
+    # We need to use the minimum of min_train_epochs and min_test_epochs
+    min_epochs_for_gap = min(min_train_epochs, min_test_epochs)
     
-    ax3.set_title('Train-Test Accuracy Gap')
-    ax3.set_xlabel('Epoch')
-    ax3.set_ylabel('Gap (Train - Test)')
-    ax3.legend(loc='upper right')
-    ax3.grid(True, alpha=0.3)
-    ax3.xaxis.set_major_locator(MaxNLocator(integer=True))
+    # Only create the gap if we have sufficient data in all arrays
+    if min_epochs_for_gap > 0:
+        gap_epochs = range(1, min_epochs_for_gap + 1)
+        
+        ann_gap = [train - test for train, test in zip(
+            ann_train_acc[:min_epochs_for_gap], 
+            ann_test_acc[:min_epochs_for_gap]
+        )]
+        snn_gap = [train - test for train, test in zip(
+            snn_train_acc[:min_epochs_for_gap], 
+            snn_test_acc[:min_epochs_for_gap]
+        )]
+        
+        ax3.plot(gap_epochs, ann_gap, 'b-', linewidth=2, label='ANN')
+        ax3.plot(gap_epochs, snn_gap, 'r-', linewidth=2, label='SNN')
+        ax3.axhline(y=0, color='gray', linestyle='--', alpha=0.5)
+        
+        ax3.set_title('Train-Test Accuracy Gap')
+        ax3.set_xlabel('Epoch')
+        ax3.set_ylabel('Gap (Train - Test)')
+        ax3.legend(loc='upper right')
+        ax3.grid(True, alpha=0.3)
+        ax3.xaxis.set_major_locator(MaxNLocator(integer=True))
+    else:
+        # Display a message if we don't have matched train/test data
+        ax3.text(0.5, 0.5, "Insufficient data for gap analysis", 
+                ha='center', va='center', transform=ax3.transAxes)
+        ax3.set_title('Train-Test Accuracy Gap')
     
     # 4. Training Loss (bottom left)
     ax4 = fig.add_subplot(gs[1, 0])
-    ax4.plot(epochs, ann_history['train_loss'], 'b-', linewidth=2, label='ANN')
-    ax4.plot(epochs, snn_history['train_loss'], 'r-', linewidth=2, label='SNN')
     
-    ax4.set_title('Training Loss')
-    ax4.set_xlabel('Epoch')
-    ax4.set_ylabel('Loss')
-    ax4.legend(loc='upper right')
-    ax4.grid(True, alpha=0.3)
-    ax4.xaxis.set_major_locator(MaxNLocator(integer=True))
+    if min_train_loss_epochs > 0:
+        train_loss_epochs = range(1, min_train_loss_epochs + 1)
+        
+        ax4.plot(train_loss_epochs, ann_train_loss[:min_train_loss_epochs], 'b-', linewidth=2, label='ANN')
+        ax4.plot(train_loss_epochs, snn_train_loss[:min_train_loss_epochs], 'r-', linewidth=2, label='SNN')
+        
+        ax4.set_title('Training Loss')
+        ax4.set_xlabel('Epoch')
+        ax4.set_ylabel('Loss')
+        ax4.legend(loc='upper right')
+        ax4.grid(True, alpha=0.3)
+        ax4.xaxis.set_major_locator(MaxNLocator(integer=True))
+    else:
+        ax4.text(0.5, 0.5, "Insufficient training loss data", 
+                ha='center', va='center', transform=ax4.transAxes)
+        ax4.set_title('Training Loss')
     
     # 5. Test Loss (bottom middle)
     ax5 = fig.add_subplot(gs[1, 1])
-    ax5.plot(epochs, ann_history['test_loss'], 'b-', linewidth=2, label='ANN')
-    ax5.plot(epochs, snn_history['test_loss'], 'r-', linewidth=2, label='SNN')
     
-    ax5.set_title('Test Loss')
-    ax5.set_xlabel('Epoch')
-    ax5.set_ylabel('Loss')
-    ax5.legend(loc='upper right')
-    ax5.grid(True, alpha=0.3)
-    ax5.xaxis.set_major_locator(MaxNLocator(integer=True))
+    if min_test_loss_epochs > 0:
+        test_loss_epochs = range(1, min_test_loss_epochs + 1)
+        
+        ax5.plot(test_loss_epochs, ann_test_loss[:min_test_loss_epochs], 'b-', linewidth=2, label='ANN')
+        ax5.plot(test_loss_epochs, snn_test_loss[:min_test_loss_epochs], 'r-', linewidth=2, label='SNN')
+        
+        ax5.set_title('Test Loss')
+        ax5.set_xlabel('Epoch')
+        ax5.set_ylabel('Loss')
+        ax5.legend(loc='upper right')
+        ax5.grid(True, alpha=0.3)
+        ax5.xaxis.set_major_locator(MaxNLocator(integer=True))
+    else:
+        ax5.text(0.5, 0.5, "Insufficient test loss data", 
+                ha='center', va='center', transform=ax5.transAxes)
+        ax5.set_title('Test Loss')
     
     # 6. Loss Ratio (bottom right)
     ax6 = fig.add_subplot(gs[1, 2])
     
-    # Loss ratio (SNN/ANN) - values > 1 mean SNN loss is higher
-    loss_ratio = [snn/ann if ann > 0 else 1 for snn, ann in zip(snn_history['test_loss'], ann_history['test_loss'])]
-    
-    ax6.plot(epochs, loss_ratio, 'g-', linewidth=2)
-    ax6.axhline(y=1.0, color='gray', linestyle='--', alpha=0.7)
-    
-    # Color regions above/below the equality line
-    ax6.fill_between(epochs, loss_ratio, 1, where=[r > 1 for r in loss_ratio], 
-                    alpha=0.2, color='red', label='SNN higher loss')
-    ax6.fill_between(epochs, loss_ratio, 1, where=[r <= 1 for r in loss_ratio], 
-                    alpha=0.2, color='green', label='ANN higher loss')
-    
-    ax6.set_title('SNN/ANN Loss Ratio')
-    ax6.set_xlabel('Epoch')
-    ax6.set_ylabel('Ratio (SNN ÷ ANN)')
-    ax6.grid(True, alpha=0.3)
-    ax6.xaxis.set_major_locator(MaxNLocator(integer=True))
-    ax6.legend(loc='upper right')
+    if min_test_loss_epochs > 0:
+        ratio_epochs = range(1, min_test_loss_epochs + 1)
+        
+        # Loss ratio (SNN/ANN) - values > 1 mean SNN loss is higher
+        # Handle potential division by zero or negative values
+        loss_ratio = []
+        for i in range(min_test_loss_epochs):
+            ann_loss = ann_test_loss[i]
+            snn_loss = snn_test_loss[i]
+            
+            if ann_loss > 0:
+                loss_ratio.append(snn_loss / ann_loss)
+            else:
+                # If ANN loss is 0 or negative, use 1.0 as default (neutral ratio)
+                loss_ratio.append(1.0)
+        
+        ax6.plot(ratio_epochs, loss_ratio, 'g-', linewidth=2)
+        ax6.axhline(y=1.0, color='gray', linestyle='--', alpha=0.7)
+        
+        # Check if we have both positive and negative differences
+        has_snn_higher = any(r > 1 for r in loss_ratio)
+        has_ann_higher = any(r <= 1 for r in loss_ratio)
+        
+        # Only create fill_between if there are actual regions to fill
+        if has_snn_higher:
+            ax6.fill_between(ratio_epochs, loss_ratio, 1, 
+                           where=[r > 1 for r in loss_ratio], 
+                           alpha=0.2, color='red', label='SNN higher loss')
+        
+        if has_ann_higher:
+            ax6.fill_between(ratio_epochs, loss_ratio, 1, 
+                           where=[r <= 1 for r in loss_ratio], 
+                           alpha=0.2, color='green', label='ANN higher loss')
+        
+        ax6.set_title('SNN/ANN Loss Ratio')
+        ax6.set_xlabel('Epoch')
+        ax6.set_ylabel('Ratio (SNN ÷ ANN)')
+        ax6.grid(True, alpha=0.3)
+        ax6.xaxis.set_major_locator(MaxNLocator(integer=True))
+        ax6.legend(loc='upper right')
+    else:
+        ax6.text(0.5, 0.5, "Insufficient data for loss ratio analysis", 
+                ha='center', va='center', transform=ax6.transAxes)
+        ax6.set_title('SNN/ANN Loss Ratio')
     
     plt.tight_layout()
     

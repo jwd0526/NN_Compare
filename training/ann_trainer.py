@@ -188,9 +188,11 @@ def train_ann_model(model: nn.Module,
                   metrics_collector: Optional[TrainingMetricsCollector] = None,
                   save_freq: int = 10,
                   verbose: bool = True,
-                  early_convergence_epochs: int = 5,  # Increased to prevent premature convergence
-                  min_training_time: float = 30.0,  # Significantly higher minimum time for more comparable training with SNN
-                  min_batches_per_epoch: Optional[int] = None) -> Dict[str, List[float]]:
+                  early_convergence_epochs: int = 2,    # Reduced to stop training earlier
+                  min_training_time: float = 10.0,      # Reduced to allow faster training cycles
+                  min_batches_per_epoch: Optional[int] = None,
+                  max_no_improvement_epochs: int = 3,   # Stop if no improvement for 3 epochs
+                  improvement_threshold: float = 0.001) -> Dict[str, List[float]]:
     """
     Train an ANN model for multiple epochs with evaluation and checkpointing.
     
@@ -225,8 +227,12 @@ def train_ann_model(model: nn.Module,
     
     criterion = nn.CrossEntropyLoss()
     
-    # Variable to track perfect accuracy epochs
+    # Variables to track early stopping conditions
     perfect_accuracy_count = 0
+    no_improvement_count = 0
+    best_test_acc = 0.0
+    best_epoch = 0
+    best_model_state = None
     
     # Training loop
     total_training_time = 0.0
@@ -328,40 +334,47 @@ def train_ann_model(model: nn.Module,
             if verbose:
                 print(f"Checkpoint saved to {checkpoint_path}")
         
-        # Check if we've reached near-perfect test accuracy (99.8% instead of 100%)
-        # This makes early stopping less aggressive and more comparable with SNNs
-        if test_accuracy >= 0.998:
-            perfect_accuracy_count += 1
-            if verbose and perfect_accuracy_count > 1:
-                print(f"Near-perfect test accuracy for {perfect_accuracy_count} consecutive epochs: {test_accuracy:.4f}")
-                
-            # Only stop early if we maintain high accuracy for the specified number of epochs
-            # AND we've spent at least min_training_time seconds training
-            time_spent = time.time() - start_time
-            if perfect_accuracy_count >= early_convergence_epochs and time_spent >= min_training_time:
-                if verbose:
-                    print(f"\nEarly stopping: High test accuracy maintained for {early_convergence_epochs} epochs.")
-                    print(f"Training converged after {epoch+1} epochs out of {epochs} and {time_spent:.1f} seconds.")
-                
-                # Save final checkpoint before stopping
-                checkpoint_path = os.path.join(
-                    checkpoint_dir, f"{experiment_name}_converged_epoch_{epoch+1}.pt"
-                )
-                torch.save({
-                    'epoch': epoch + 1,
-                    'model_state_dict': model.state_dict(),
-                    'optimizer_state_dict': optimizer.state_dict(),
-                    'train_acc': train_accuracy,
-                    'test_acc': test_accuracy,
-                }, checkpoint_path)
-                
-                if verbose:
-                    print(f"Converged model saved to {checkpoint_path}")
-                
-                break
+        # Save best model state
+        if test_accuracy > best_test_acc:
+            best_test_acc = test_accuracy
+            best_epoch = epoch
+            best_model_state = model.state_dict().copy()
+            no_improvement_count = 0
         else:
-            # Reset counter if accuracy drops below threshold
-            perfect_accuracy_count = 0
+            # Check if improvement is below threshold
+            if test_accuracy < best_test_acc + improvement_threshold:
+                no_improvement_count += 1
+                # Removed progress messages about improvement
+            else:
+                # Some improvement, but not enough to be best
+                no_improvement_count = 0
+        
+        # Removed early stopping conditions to always train for full number of epochs
+        
+        # Only track best model without early stopping
+        if test_accuracy > best_test_acc:
+            best_test_acc = test_accuracy
+            best_epoch = epoch
+            best_model_state = model.state_dict().copy()
+            if verbose and (epoch + 1) % 10 == 0:  # Only log occasionally
+                print(f"New best test accuracy: {best_test_acc:.4f} at epoch {best_epoch+1}")
+                
+        # Always save the best model at the end
+        if epoch == epochs - 1 and best_model_state is not None:
+            # Save best model checkpoint
+            best_checkpoint_path = os.path.join(
+                checkpoint_dir, f"{experiment_name}_best_epoch_{best_epoch+1}.pt")
+            
+            # Save the best model state
+            torch.save({
+                'epoch': best_epoch + 1,
+                'model_state_dict': best_model_state,
+                'optimizer_state_dict': optimizer.state_dict(),
+                'test_acc': best_test_acc,
+            }, best_checkpoint_path)
+            
+            if verbose:
+                print(f"Best model (epoch {best_epoch+1}, accuracy {best_test_acc:.4f}) saved to {best_checkpoint_path}")
     
     # Return training history
     if metrics_collector is not None:

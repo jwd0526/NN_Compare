@@ -295,18 +295,35 @@ def load_data_from_npz(file_path: str) -> Tuple[np.ndarray, np.ndarray]:
     
     # Try common key names in npz files
     if 'patterns' in data and 'labels' in data:
-        return data['patterns'], data['labels']
+        patterns = data['patterns']
+        labels = data['labels']
     elif 'x' in data and 'y' in data:
-        return data['x'], data['y']
+        patterns = data['x']
+        labels = data['y']
     elif 'spike_data' in data and 'labels' in data:
-        return data['spike_data'], data['labels']
+        patterns = data['spike_data']
+        labels = data['labels']
     else:
-        # If keys aren't standard, just return the first two arrays
+        # If keys aren't standard, just use the first two arrays
         keys = list(data.keys())
         if len(keys) >= 2:
-            return data[keys[0]], data[keys[1]]
+            patterns = data[keys[0]]
+            labels = data[keys[1]]
         else:
             raise ValueError(f"Could not identify data and labels in {file_path}")
+    
+    # Verify shapes match and fix if needed
+    if len(patterns) != len(labels):
+        print(f"Warning: Shape mismatch in {file_path}")
+        print(f"Patterns shape: {patterns.shape}, Labels shape: {labels.shape}")
+        
+        # Truncate to the minimum length
+        min_len = min(len(patterns), len(labels))
+        patterns = patterns[:min_len]
+        labels = labels[:min_len]
+        print(f"Truncated to {min_len} samples for compatibility")
+    
+    return patterns, labels
 
 def save_dataset(spike_data: np.ndarray, labels: np.ndarray, file_path: str):
     """

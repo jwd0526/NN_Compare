@@ -186,7 +186,7 @@ class SyntheticANN(BaseANN):
     """
     
     def __init__(self, input_size: int, hidden_size: int, output_size: int,
-                 length: int = None, batch_size: int = None):
+                 length: int = 100, batch_size: int = 32):
         """
         Initialize the synthetic ANN model.
         
@@ -194,10 +194,28 @@ class SyntheticANN(BaseANN):
             input_size: Number of input features
             hidden_size: Number of neurons in hidden layers
             output_size: Number of output classes
-            length: Optional time steps (for compatibility with SNN)
-            batch_size: Optional batch size (for compatibility with SNN)
+            length: Time steps for temporal data (for compatibility with SNN)
+            batch_size: Batch size (for compatibility with SNN)
         """
         super().__init__(input_size, output_size)
         self.hidden_size = hidden_size
         self.length = length
         self.batch_size = batch_size
+        
+    def reshape_input_if_needed(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        Reshape input tensor if it has incorrect dimensions.
+        
+        Args:
+            x: Input tensor of shape [batch_size, input_size] or [batch_size, input_size, length]
+            
+        Returns:
+            Reshaped tensor of shape [batch_size, input_size, length]
+        """
+        if len(x.shape) == 2:  # [batch_size, features]
+            # Reshape to [batch_size, input_size, 1] 
+            x = x.view(x.size(0), self.input_size, 1)
+            # Repeat to match the expected length
+            x = x.repeat(1, 1, self.length)
+        
+        return x

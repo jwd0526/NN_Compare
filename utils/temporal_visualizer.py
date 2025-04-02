@@ -1,20 +1,29 @@
 #!/usr/bin/env python3
 """
-Temporal Visualizer - Creates sample visualization images for temporal analysis.
+Temporal Feature Importance Visualization Generator
 
-This script generates sample visualization images that can be used in the 
-temporal analysis document when actual benchmark results aren't available.
+This script generates a default temporal feature importance visualization 
+when the actual data is not available. It provides a fallback visualization
+for the comparison dashboard.
 """
 
 import os
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 import seaborn as sns
+import matplotlib.patches as mpatches
 
-def create_temporal_feature_importance():
-    """Create a sample temporal feature importance visualization."""
-    # Features that impact temporal learning
+def generate_feature_importance_visualization(output_dir='./results/temporal_analysis/visualizations'):
+    """
+    Generate a synthetic visualization of temporal feature importance.
+    
+    Args:
+        output_dir: Directory to save the visualization
+    """
+    # Create output directory if it doesn't exist
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Temporal features
     temporal_features = [
         "Precise timing",
         "Temporal correlation",
@@ -24,15 +33,10 @@ def create_temporal_feature_importance():
         "Pattern complexity"
     ]
     
-    # Create synthetic scores as example
+    # Create synthetic scores as example (in a real analysis, these would be computed)
     ann_scores = [0.35, 0.4, 0.6, 0.5, 0.45, 0.7]
     snn_scores = [0.8, 0.7, 0.5, 0.65, 0.7, 0.45]
     
-    # Set output directory
-    output_dir = "./results/temporal_analysis/visualizations"
-    os.makedirs(output_dir, exist_ok=True)
-    
-    # Create figure
     fig = plt.figure(figsize=(14, 8))
     
     # 1. Comparative Bar Chart
@@ -88,15 +92,23 @@ def create_temporal_feature_importance():
     
     plt.tight_layout()
     
-    # Save the figure
+    # Save figure
     output_path = os.path.join(output_dir, "temporal_feature_importance.png")
     plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    print(f"Temporal feature importance visualization saved to {output_path}")
     plt.close()
     
-    print(f"Temporal feature importance visualization saved to {output_path}")
     return output_path
 
+def main():
+    """Main function to generate all default visualizations."""
+    # Set default output directory
+    output_dir = './results/temporal_analysis/visualizations'
+    
+    # Generate and save the feature importance visualization
+    generate_feature_importance_visualization(output_dir)
+    
+    print("Default visualizations created successfully!")
+
 if __name__ == "__main__":
-    print("Generating sample temporal visualizations...")
-    create_temporal_feature_importance()
-    print("Done.")
+    main()

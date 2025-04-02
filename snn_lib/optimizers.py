@@ -15,8 +15,14 @@ def get_optimizer(params, conf):
 
     if optimizer_choice == 'Adam':
         lr = optimizer_conf['Adam']['lr']
-        print('optimizer:', optimizer_conf['optimizer_choice'], 'lr:', lr)
-        return torch.optim.Adam(params, lr)
+        weight_decay = optimizer_conf['Adam'].get('weight_decay', 0)
+        amsgrad = optimizer_conf['Adam'].get('amsgrad', False)
+        betas = optimizer_conf['Adam'].get('betas', (0.9, 0.999))
+        eps = optimizer_conf['Adam'].get('eps', 1e-8)
+        print('optimizer:', optimizer_conf['optimizer_choice'], 'lr:', lr, 
+              'weight_decay:', weight_decay, 'amsgrad:', amsgrad)
+        return torch.optim.Adam(params, lr=lr, weight_decay=weight_decay, 
+                              amsgrad=amsgrad, betas=betas, eps=eps)
     elif optimizer_choice == 'AdamW':
         lr = optimizer_conf['AdamW']['lr']
         print('optimizer:', optimizer_conf['optimizer_choice'], 'lr:', lr)

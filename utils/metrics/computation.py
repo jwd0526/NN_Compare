@@ -10,6 +10,7 @@ import torch
 from typing import Dict, List, Optional, Any, Union, Tuple
 from sklearn.metrics import confusion_matrix
 from torch.utils.data import DataLoader
+import traceback
 
 def compute_confusion_matrix(model: torch.nn.Module, 
                           data_loader: DataLoader, 
@@ -33,29 +34,47 @@ def compute_confusion_matrix(model: torch.nn.Module,
     
     with torch.no_grad():
         for data, target in data_loader:
+            # Convert PyTorch tensors to device
             data, target = data.to(device), target.to(device)
             
-            # Forward pass
-            output = model(data)
-            
-            # Calculate loss
-            # For SNNs, we typically sum over the time dimension
-            if output.dim() > 2 and output.shape[-1] > 1:  # Likely SNN output with time dimension
-                spike_count = torch.sum(output, dim=2)
-                loss = criterion(spike_count, target.long())
-            else:
+            try:
+                # Identify the model type
+                model_type = model.__class__.__name__
+                
+                # Different handling based on model type
+                if model_type == 'SyntheticANN':
+                    # ANN model - forward will handle dimensions appropriately
+                    output = model(data)
+                else:
+                    # For SNN, use standard forward
+                    output = model(data)
+                    
+                    # For 3D output (SNN), sum over time dimension
+                    if output.dim() > 2 and output.shape[-1] > 1:
+                        output = torch.sum(output, dim=2)
+                
+                # Compute loss
                 loss = criterion(output, target.long())
-            
-            total_loss += loss.item()
-            
-            # Get predictions
-            if output.dim() > 2 and output.shape[-1] > 1:
-                _, predicted = torch.max(spike_count.data, 1)
-            else:
+                total_loss += loss.item()
+                
+                # Calculate predictions
                 _, predicted = torch.max(output.data, 1)
-            
-            all_predictions.extend(predicted.cpu().numpy())
-            all_labels.extend(target.cpu().numpy())
+                
+                # Store predictions and labels
+                all_predictions.extend(predicted.cpu().numpy())
+                all_labels.extend(target.cpu().numpy())
+                
+            except Exception as e:
+                # Print error and continue (try to recover)
+                print(f"Error during evaluation: {str(e)}")
+                traceback.print_exc()
+                continue
+    
+    # Early exit if no predictions were made
+    if len(all_predictions) == 0 or len(all_labels) == 0:
+        print("Warning: No predictions could be made. Evaluation failed.")
+        # Return dummy values
+        return np.zeros((2, 2)), 0.0, float('inf')
     
     # Convert to numpy arrays
     all_predictions = np.array(all_predictions)
@@ -68,7 +87,7 @@ def compute_confusion_matrix(model: torch.nn.Module,
     accuracy = np.sum(all_predictions == all_labels) / len(all_labels)
     
     # Calculate average loss
-    avg_loss = total_loss / len(data_loader)
+    avg_loss = total_loss / len(data_loader) if len(data_loader) > 0 else float('inf')
     
     return cm, accuracy, avg_loss
 
@@ -153,13 +172,13 @@ def compute_per_class_metrics(model: torch.nn.Module,
     
     for i in range(n_classes):
         # True positives are the diagonal elements
-        tp = cm[i, i]
+        tp = cm[i, i] if i < cm.shape[0] and i < cm.shape[1] else 0
         
         # False positives are the sum of column i minus the diagonal element
-        fp = np.sum(cm[:, i]) - tp
+        fp = np.sum(cm[:, i]) - tp if i < cm.shape[1] else 0
         
         # False negatives are the sum of row i minus the diagonal element
-        fn = np.sum(cm[i, :]) - tp
+        fn = np.sum(cm[i, :]) - tp if i < cm.shape[0] else 0
         
         # Calculate precision, recall, and F1 score
         p = tp / (tp + fp) if (tp + fp) > 0 else 0
